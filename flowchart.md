@@ -2,38 +2,39 @@
 
 flowchart TB
     A((Start)) --> B[Open AWX/AAP Environment]
-    B --> C[Enter:<br><code>awx-manage shell_plus</code>]
-    C --> D[Run the script with:<br><code>exec(open("/path/script.py").read())</code>]
-    D --> E{1) List all used Credential Types?}
-    E -->|Yes| F[List used Credential Types on screen]
+    B --> C[Enter awx-manage shell_plus]
+    C --> D[Run the script:\nexec(open("/path/script.py").read())]
+    D --> E{1) List all used\nCredential Types?}
+    E -->|Yes| F[List used Credential Types\non screen]
     E -->|No| H[Skip listing]
 
-    F --> G[Show user the IDs and Names of used Credential Types]
+    F --> G[Show user IDs & Names\nof used Credential Types]
     G --> H
 
-    H --> I{2) Decrypt credentials<br> for specific type,<br> all, or skip?}
-    I -->|Specific| J[User selects ID of Credential Type]
-    I -->|All| K[Decrypt all used Credential Types]
-    I -->|Skip| U[No decryption,<br> jump to end]
+    H --> I{2) Decrypt credentials\n(specific/all/skip)?}
+    I -->|Specific| J[User selects Credential\nType ID]
+    I -->|All| K[Decrypt all used\nCredential Types]
+    I -->|Skip| U[No decryption]
 
     J --> L{Is ID valid?}
-    L -->|Yes| M[Decrypt credentials<br> for that type]
-    L -->|No| X[Invalid ID<br>script exits]
+    L -->|Yes| M[Decrypt credentials\nfor that type]
+    L -->|No| X[Invalid ID.\nExit]
 
-    M --> O[Store decrypted results in memory]
+    M --> O[Store decrypted results]
     K --> O
-    U --> W{3) End Script?<br>(No credentials decrypted)}
-    W --> X[Script exits]
-    O --> P{Any credentials decrypted?}
-    P -->|Yes| Q[Choose output method:<br>1) Screen<br>2) File<br>3) Both]
-    P -->|No| V[No credentials to display<br>script ends]
+    U --> W{3) End Script?\n(No credentials decrypted)}
+    W --> X[Exit]
 
-    Q --> R{If 1: Print on screen}
+    O --> P{Any credentials\nwere decrypted?}
+    P -->|Yes| Q[Choose output:\n1) Screen\n2) File\n3) Both]
+    P -->|No| V[No creds to display.\nEnd]
+
+    Q --> R[If 1: Print on screen]
     R --> S
-    Q --> T{If 2: Prompt filename<br> & save as JSON}
+    Q --> T[If 2: Prompt filename\n& save as JSON]
     T --> S
-    Q --> S{If 3: Do both<br> (print & save)}
-    S --> X[End of Script]
+    Q --> S[If 3: Do both]
+    S --> X[End]
 
 
 ```
