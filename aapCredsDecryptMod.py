@@ -68,25 +68,35 @@ def decrypt_credentials_by_type(cred_type):
                 "name": cred.organization.name
             }
 
-        # Access List (Users and Teams) - Corrected Section
+        # Access List (Users and Teams) -  Handles both old and new AWX versions
         for role_name in ['admin_role', 'use_role', 'read_role']:
-            role = getattr(cred, role_name)  # Get the role (admin, use, read)
-            if role:  # Check if the role is actually set
+            role = getattr(cred, role_name)
+            if role:
                 for user in role.members.all():
                     cred_info["access_list"].append({
                         "type": "user",
                         "id": user.id,
                         "username": user.username,
-                        "role": role_name.replace('_role', '')  # Extract role name
-                    })
-                # Use team_set to access related teams
-                for team in role.team_set.all():
-                    cred_info["access_list"].append({
-                        "type": "team",
-                        "id": team.id,
-                        "name": team.name,
                         "role": role_name.replace('_role', '')
                     })
+                try:
+                    # Newer AWX/AAP versions: use team_set
+                    for team in role.team_set.all():
+                        cred_info["access_list"].append({
+                            "type": "team",
+                            "id": team.id,
+                            "name": team.name,
+                            "role": role_name.replace('_role', '')
+                        })
+                except AttributeError:
+                    # Older AWX/AAP versions:  use teams directly
+                    for team in role.teams.all():
+                        cred_info["access_list"].append({
+                            "type": "team",
+                            "id": team.id,
+                            "name": team.name,
+                            "role": role_name.replace('_role', '')
+                        })
 
 
         # Job Templates using this credential (direct usage)
@@ -222,11 +232,5 @@ def main():
                 print(f"Error writing file: {e}")
     else:
         print("\nNo credentials to display or export.\n")
-
-    # If you are calling this script with `exec(open("script.py").read())`,
-    # remove the conditional and call main() directly.
-
-    #if __name__ == "__main__":
-    #    main()
 
 main()
