@@ -7,11 +7,13 @@ from datetime import datetime
 print("DEBUG: The script has started running.")
 
 try:
-    # AWX and AAP specific imports
-    from awx.main.models import Credential, CredentialType, Organization, Project, JobTemplate, Team
+    # AWX/AAP specific imports
+    from awx.main.models import (
+        Credential, CredentialType, Organization, Project,
+        JobTemplate, Team, Role
+    )
     from awx.main.utils import decrypt_field
-    from django.db.models import Q  # For querying access lists
-    from awx.main.models import Role #import Role to examine
+    from django.db.models import Q  # For constructing query filters
     print("DEBUG: Imports succeeded.")
 except ImportError:
     print("ERROR: This script must be run within the AWX/AAP environment.")
@@ -35,8 +37,7 @@ SECRET_FIELDS = [
 
 def list_used_credential_types():
     """
-    Return a list of CredentialTypes that are actively used
-    by existing Credential objects.
+    Return a queryset of CredentialTypes that are actively used by existing Credential objects.
     """
     used_ct_ids = Credential.objects.values_list("credential_type_id", flat=True).distinct()
     return CredentialType.objects.filter(id__in=used_ct_ids)
@@ -44,33 +45,31 @@ def list_used_credential_types():
 def get_teams_from_role(role):
     """
     Dynamically determines how to get teams from a Role object.
-    This function is the key to handling different AWX versions.
+    This handles differences between AWX/AAP versions.
     """
     teams = []
     if hasattr(role, 'team_set'):
-        # Newer AWX/AAP
+        # Newer AWX/AAP versions
         teams = list(role.team_set.all())
     elif hasattr(role, 'teams'):
-        # Older AWX/AAP
+        # Older AWX/AAP versions
         teams = list(role.teams.all())
     else:
-        # Introspection and direct filtering
+        # Fallback: use model introspection
         for related_object in role._meta.related_objects:
             if related_object.related_model == Team:
-                # Construct a filter to get related teams
                 filter_kwargs = {related_object.field.name: role}
                 teams = list(Team.objects.filter(**filter_kwargs))
-                break  # Stop after the first likely candidate
+                break  # Use the first matching relationship
 
     if not teams:
         print(f"WARNING: Could not find related teams for role: {role}.  Skipping team access.")
-
     return teams
 
 def decrypt_credentials_by_type(cred_type):
     """
     Decrypt all credentials matching the provided CredentialType.
-    Return a list of dicts with credential info.
+    Returns a list of dictionaries containing credential info.
     """
     creds = Credential.objects.filter(credential_type=cred_type)
     results = []
@@ -88,44 +87,43 @@ def decrypt_credentials_by_type(cred_type):
             "decrypted_fields": {},
         }
 
-        # Organization
+        # Organization info
         if cred.organization:
             cred_info["organization"] = {
                 "id": cred.organization.id,
                 "name": cred.organization.name
             }
 
-        # Access List (Users and Teams)
-        for role_name in ['admin_role', 'use_role', 'read_role']:
-            role = getattr(cred, role_name)
+        # Build the access list for users and teams
+        for role_attr in ['admin_role', 'use_role', 'read_role']:
+            role = getattr(cred, role_attr, None)
             if role:
+                # Add users
                 for user in role.members.all():
                     cred_info["access_list"].append({
                         "type": "user",
                         "id": user.id,
                         "username": user.username,
-                        "role": role_name.replace('_role', '')
+                        "role": role_attr.replace('_role', '')
                     })
-
-                # Use the helper function to get teams
+                # Add teams using our helper function
                 for team in get_teams_from_role(role):
                     cred_info["access_list"].append({
                         "type": "team",
                         "id": team.id,
                         "name": team.name,
-                        "role": role_name.replace('_role', '')
+                        "role": role_attr.replace('_role', '')
                     })
 
-
-        # Job Templates (direct)
-        for jt in JobTemplate.objects.filter(credential=cred):
+        # Job Templates directly linked via the many-to-many field "credentials"
+        for jt in JobTemplate.objects.filter(credentials=cred):
             cred_info["related_job_templates"].append({
                 "id": jt.id,
                 "name": jt.name,
                 "type": "job_template"
             })
 
-        # Job Templates through projects - Corrected Section (BOTH filters)
+        # Job Templates associated through projects referencing this credential
         for proj in Project.objects.filter(Q(credential_id=cred.id) | Q(scm_credential_id=cred.id)):
             for jt in JobTemplate.objects.filter(project_id=proj.id):
                 cred_info["related_job_templates"].append({
@@ -136,12 +134,13 @@ def decrypt_credentials_by_type(cred_type):
                     "project_name": proj.name
                 })
 
-        # Decrypt only the fields that exist in cred.inputs
+        # Attempt to decrypt fields that are present in cred.inputs
         for field_name in SECRET_FIELDS:
             if field_name in cred.inputs:
                 try:
                     value = decrypt_field(cred, field_name)
-                except Exception:
+                except Exception as e:
+                    print(f"ERROR: Failed to decrypt field {field_name} for credential {cred.id}: {e}")
                     value = None
                 cred_info["decrypted_fields"][field_name] = value
 
@@ -151,8 +150,8 @@ def decrypt_credentials_by_type(cred_type):
 
 def decrypt_all_used_types():
     """
-    Decrypt all credentials for *all* used credential types.
-    Return a combined list of all decrypted credentials.
+    Decrypt credentials for all used credential types.
+    Returns a combined list of all decrypted credentials.
     """
     all_results = []
     used_types = list_used_credential_types()
@@ -165,7 +164,7 @@ print("DEBUG: About to enter main()")
 def main():
     print("DEBUG: Entered main()")
 
-    # 1) Prompt user
+    # 1) Ask the user whether to list used Credential Types.
     show_types = input("Do you want to list all used Credential Types? (y/n): ").strip().lower()
     if show_types == "y":
         used_types = list_used_credential_types()
@@ -174,6 +173,7 @@ def main():
             print(f"  - ID: {ct.id}, Name: {ct.name}")
         print()
 
+    # 2) Ask the user whether to decrypt specific or all credentials.
     print("Do you want to see decrypted credentials for a specific Credential Type or for all used credentials?")
     show_creds = input("Enter 's' for specific, 'a' for all, or press [Enter] to skip: ").strip().lower()
     all_decrypted = []
@@ -207,8 +207,15 @@ def main():
     else:
         print("\nSkipping credential decryption.\n")
 
-    # 3) Output
-    if len(all_decrypted) > 0:
+    # 3) Output the results if any credentials were decrypted.
+    if all_decrypted:
+        # Remove duplicate job template entries for each credential.
+        for cred in all_decrypted:
+            unique_jts = {tuple(sorted(d.items())) for d in cred['related_job_templates']}
+            cred['related_job_templates'] = [dict(t) for t in unique_jts]
+
+        output_json = json.dumps(all_decrypted, indent=2)
+
         choice = input(
             "How do you want to output the decrypted credentials?\n"
             "  1) Standard Output\n"
@@ -220,11 +227,6 @@ def main():
         if choice not in ["1", "2", "3"]:
             print("Invalid choice. Exiting.\n")
             sys.exit(0)
-
-        for cred in all_decrypted:
-            cred['related_job_templates'] = [dict(t) for t in {tuple(d.items()) for d in cred['related_job_templates']}]
-
-        output_json = json.dumps(all_decrypted, indent=2)
 
         if choice in ["1", "3"]:
             print("\n===== DECRYPTED CREDENTIALS =====")
@@ -242,4 +244,6 @@ def main():
     else:
         print("\nNo credentials to display or export.\n")
 
-main()
+if __name__ == '__main__':
+    main()
+
