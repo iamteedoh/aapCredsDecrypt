@@ -8,7 +8,7 @@ print("DEBUG: The script has started running.")
 
 try:
     # AWX and AAP specific imports
-    from awx.main.models import Credential, CredentialType, Organization, Project, JobTemplate
+    from awx.main.models import Credential, CredentialType, Organization, Project, JobTemplate, Team
     from awx.main.utils import decrypt_field
     from django.db.models import Q  # For querying access lists
     from awx.main.models import Role #import Role to examine
@@ -54,22 +54,18 @@ def get_teams_from_role(role):
         # Older AWX/AAP
         teams = list(role.teams.all())
     else:
-        # Introspection to find related teams, if possible
-        for attr_name in dir(role):
-            attr = getattr(role, attr_name)
-            # Check if the attribute is a manager and related to Teams
-            if hasattr(attr, 'model') and attr.model == Team:
-                try:
-                    teams = list(attr.all())
-                    break  # Stop after finding the first likely candidate
-                except Exception:
-                    pass #Ignore, we will report an error later.
+        # Introspection and direct filtering
+        for related_object in role._meta.related_objects:
+            if related_object.related_model == Team:
+                # Construct a filter to get related teams
+                filter_kwargs = {related_object.field.name: role}
+                teams = list(Team.objects.filter(**filter_kwargs))
+                break  # Stop after the first likely candidate
 
-    if not teams: #if still empty
+    if not teams:
         print(f"WARNING: Could not find related teams for role: {role}.  Skipping team access.")
 
     return teams
-
 
 def decrypt_credentials_by_type(cred_type):
     """
