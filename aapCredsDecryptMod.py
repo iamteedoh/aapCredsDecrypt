@@ -10,7 +10,7 @@ try:
     # AWX and AAP specific imports
     from awx.main.models import Credential, CredentialType, Organization, Project, JobTemplate
     from awx.main.utils import decrypt_field
-    from django.db.models import Q # For querying access lists
+    from django.db.models import Q  # For querying access lists
     print("DEBUG: Imports succeeded.")
 except ImportError:
     print("ERROR: This script must be run within the AWX/AAP environment.")
@@ -56,7 +56,7 @@ def decrypt_credentials_by_type(cred_type):
             "created": cred.created.isoformat() if cred.created else None,  # Date Created
             "modified": cred.modified.isoformat() if cred.modified else None,  # Date Modified
             "organization": None,
-            "access_list": [], # Who has access
+            "access_list": [],  # Who has access
             "related_job_templates": [],
             "decrypted_fields": {},
         }
@@ -68,20 +68,27 @@ def decrypt_credentials_by_type(cred_type):
                 "name": cred.organization.name
             }
 
-        # Access List (Users and Teams)
-        for user in cred.admin_role.members.all():
-            cred_info["access_list"].append({"type": "user", "id": user.id, "username": user.username, "role": "admin"})
-        for user in cred.use_role.members.all():
-            cred_info["access_list"].append({"type": "user", "id": user.id, "username": user.username, "role": "use"})
-        for user in cred.read_role.members.all():
-            cred_info["access_list"].append({"type": "user", "id": user.id, "username": user.username, "role": "read"})
-        for team in cred.admin_role.teams.all():
-            cred_info["access_list"].append({"type": "team", "id": team.id, "name": team.name, "role": "admin"})
-        for team in cred.use_role.teams.all():
-            cred_info["access_list"].append({"type": "team", "id": team.id, "name": team.name, "role": "use"})
-        for team in cred.read_role.teams.all():
-            cred_info["access_list"].append({"type": "team", "id": team.id, "name": team.name, "role": "read"})
-        
+        # Access List (Users and Teams) - Corrected Section
+        for role_name in ['admin_role', 'use_role', 'read_role']:
+            role = getattr(cred, role_name)  # Get the role (admin, use, read)
+            if role:  # Check if the role is actually set
+                for user in role.members.all():
+                    cred_info["access_list"].append({
+                        "type": "user",
+                        "id": user.id,
+                        "username": user.username,
+                        "role": role_name.replace('_role', '')  # Extract role name
+                    })
+                # Use team_set to access related teams
+                for team in role.team_set.all():
+                    cred_info["access_list"].append({
+                        "type": "team",
+                        "id": team.id,
+                        "name": team.name,
+                        "role": role_name.replace('_role', '')
+                    })
+
+
         # Job Templates using this credential (direct usage)
         for jt in JobTemplate.objects.filter(credential=cred):
              cred_info["related_job_templates"].append({
@@ -100,7 +107,7 @@ def decrypt_credentials_by_type(cred_type):
                     "project_id": proj.id,
                     "project_name": proj.name
                 })
-                
+
 
         # Decrypt only the fields that exist in cred.inputs
         for field_name in SECRET_FIELDS:
