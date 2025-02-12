@@ -123,8 +123,13 @@ def decrypt_credentials_by_type(cred_type):
                 "type": "job_template"
             })
 
-        # Job Templates associated through projects referencing this credential
-        for proj in Project.objects.filter(Q(credential_id=cred.id) | Q(scm_credential_id=cred.id)):
+        # Job Templates through projects referencing this credential.
+        # Build a filter query for projects with a direct credential link.
+        filter_query = Q(credential_id=cred.id)
+        # If the Project model has an 'scm_credential' field, include that in the query.
+        if 'scm_credential' in [f.name for f in Project._meta.get_fields()]:
+            filter_query |= Q(scm_credential_id=cred.id)
+        for proj in Project.objects.filter(filter_query):
             for jt in JobTemplate.objects.filter(project_id=proj.id):
                 cred_info["related_job_templates"].append({
                     "id": jt.id,
@@ -244,6 +249,6 @@ def main():
     else:
         print("\nNo credentials to display or export.\n")
 
-if __name__ == '__main__':
-    main()
+# For interactive environments like AWX's shell_plus, call main() directly.
+main()
 
