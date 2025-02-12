@@ -11,6 +11,7 @@ try:
     from awx.main.models import Credential, CredentialType, Organization, Project, JobTemplate
     from awx.main.utils import decrypt_field
     from django.db.models import Q  # For querying access lists
+    from awx.main.models import Role #import Role to examine
     print("DEBUG: Imports succeeded.")
 except ImportError:
     print("ERROR: This script must be run within the AWX/AAP environment.")
@@ -40,6 +41,36 @@ def list_used_credential_types():
     used_ct_ids = Credential.objects.values_list("credential_type_id", flat=True).distinct()
     return CredentialType.objects.filter(id__in=used_ct_ids)
 
+def get_teams_from_role(role):
+    """
+    Dynamically determines how to get teams from a Role object.
+    This function is the key to handling different AWX versions.
+    """
+    teams = []
+    if hasattr(role, 'team_set'):
+        # Newer AWX/AAP
+        teams = list(role.team_set.all())
+    elif hasattr(role, 'teams'):
+        # Older AWX/AAP
+        teams = list(role.teams.all())
+    else:
+        # Introspection to find related teams, if possible
+        for attr_name in dir(role):
+            attr = getattr(role, attr_name)
+            # Check if the attribute is a manager and related to Teams
+            if hasattr(attr, 'model') and attr.model == Team:
+                try:
+                    teams = list(attr.all())
+                    break  # Stop after finding the first likely candidate
+                except Exception:
+                    pass #Ignore, we will report an error later.
+
+    if not teams: #if still empty
+        print(f"WARNING: Could not find related teams for role: {role}.  Skipping team access.")
+
+    return teams
+
+
 def decrypt_credentials_by_type(cred_type):
     """
     Decrypt all credentials matching the provided CredentialType.
@@ -53,10 +84,10 @@ def decrypt_credentials_by_type(cred_type):
             "id": cred.id,
             "name": cred.name,
             "credential_type": cred_type.name,
-            "created": cred.created.isoformat() if cred.created else None,  # Date Created
-            "modified": cred.modified.isoformat() if cred.modified else None,  # Date Modified
+            "created": cred.created.isoformat() if cred.created else None,
+            "modified": cred.modified.isoformat() if cred.modified else None,
             "organization": None,
-            "access_list": [],  # Who has access
+            "access_list": [],
             "related_job_templates": [],
             "decrypted_fields": {},
         }
@@ -68,7 +99,7 @@ def decrypt_credentials_by_type(cred_type):
                 "name": cred.organization.name
             }
 
-        # Access List (Users and Teams) -  Handles both old and new AWX versions
+        # Access List (Users and Teams) - Now with dynamic team retrieval
         for role_name in ['admin_role', 'use_role', 'read_role']:
             role = getattr(cred, role_name)
             if role:
@@ -79,35 +110,26 @@ def decrypt_credentials_by_type(cred_type):
                         "username": user.username,
                         "role": role_name.replace('_role', '')
                     })
-                try:
-                    # Newer AWX/AAP versions: use team_set
-                    for team in role.team_set.all():
-                        cred_info["access_list"].append({
-                            "type": "team",
-                            "id": team.id,
-                            "name": team.name,
-                            "role": role_name.replace('_role', '')
-                        })
-                except AttributeError:
-                    # Older AWX/AAP versions:  use teams directly
-                    for team in role.teams.all():
-                        cred_info["access_list"].append({
-                            "type": "team",
-                            "id": team.id,
-                            "name": team.name,
-                            "role": role_name.replace('_role', '')
-                        })
+
+                # Use the helper function to get teams
+                for team in get_teams_from_role(role):
+                    cred_info["access_list"].append({
+                        "type": "team",
+                        "id": team.id,
+                        "name": team.name,
+                        "role": role_name.replace('_role', '')
+                    })
 
 
-        # Job Templates using this credential (direct usage)
+        # Job Templates
         for jt in JobTemplate.objects.filter(credential=cred):
-             cred_info["related_job_templates"].append({
-                 "id": jt.id,
-                 "name": jt.name,
-                 "type": "job_template"
-             })
+            cred_info["related_job_templates"].append({
+                "id": jt.id,
+                "name": jt.name,
+                "type": "job_template"
+            })
 
-        #Job Templates through projects.
+        # Job Templates through projects.
         for proj in Project.objects.filter(Q(credential=cred) | Q(scm_credential=cred)):
             for jt in JobTemplate.objects.filter(project=proj):
                 cred_info["related_job_templates"].append({
@@ -118,14 +140,13 @@ def decrypt_credentials_by_type(cred_type):
                     "project_name": proj.name
                 })
 
-
         # Decrypt only the fields that exist in cred.inputs
         for field_name in SECRET_FIELDS:
             if field_name in cred.inputs:
                 try:
                     value = decrypt_field(cred, field_name)
                 except Exception:
-                    value = None  # or "ERROR DECRYPTING"
+                    value = None
                 cred_info["decrypted_fields"][field_name] = value
 
         results.append(cred_info)
@@ -148,7 +169,7 @@ print("DEBUG: About to enter main()")
 def main():
     print("DEBUG: Entered main()")
 
-    # 1) Prompt user: list all used Credential Types?
+    # 1) Prompt user
     show_types = input("Do you want to list all used Credential Types? (y/n): ").strip().lower()
     if show_types == "y":
         used_types = list_used_credential_types()
@@ -157,13 +178,11 @@ def main():
             print(f"  - ID: {ct.id}, Name: {ct.name}")
         print()
 
-    # 2) Prompt user: "specific" or "all" or skip
     print("Do you want to see decrypted credentials for a specific Credential Type or for all used credentials?")
     show_creds = input("Enter 's' for specific, 'a' for all, or press [Enter] to skip: ").strip().lower()
     all_decrypted = []
 
     if show_creds == "s":
-        # -- Decrypt one specific CredentialType --
         used_types = list_used_credential_types()
         if not used_types:
             print("No credential types found.\n")
@@ -186,15 +205,13 @@ def main():
             sys.exit(0)
 
     elif show_creds == "a":
-        # -- Decrypt *all* used CredentialTypes --
         print("\nDecrypting credentials for ALL used credential types...\n")
         all_decrypted = decrypt_all_used_types()
 
     else:
-        # If user pressed Enter or typed something else, skip.
         print("\nSkipping credential decryption.\n")
 
-    # 3) Output results only if we have decrypted credentials
+    # 3) Output
     if len(all_decrypted) > 0:
         choice = input(
             "How do you want to output the decrypted credentials?\n"
@@ -208,21 +225,17 @@ def main():
             print("Invalid choice. Exiting.\n")
             sys.exit(0)
 
-        # Convert to JSON for easy reading.  Remove duplicates from Job Templates
         for cred in all_decrypted:
             cred['related_job_templates'] = [dict(t) for t in {tuple(d.items()) for d in cred['related_job_templates']}]
 
         output_json = json.dumps(all_decrypted, indent=2)
 
-
         if choice in ["1", "3"]:
-            # Print to stdout
             print("\n===== DECRYPTED CREDENTIALS =====")
             print(output_json)
             print("=================================\n")
 
         if choice in ["2", "3"]:
-            # Also (or only) save to file
             filename = input("Enter filename to save credentials (e.g., /tmp/creds.json): ").strip()
             try:
                 with open(filename, "w") as f:
