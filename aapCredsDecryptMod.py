@@ -95,7 +95,7 @@ def decrypt_credentials_by_type(cred_type):
                 "name": cred.organization.name
             }
 
-        # Access List (Users and Teams) - Now with dynamic team retrieval
+        # Access List (Users and Teams)
         for role_name in ['admin_role', 'use_role', 'read_role']:
             role = getattr(cred, role_name)
             if role:
@@ -125,9 +125,9 @@ def decrypt_credentials_by_type(cred_type):
                 "type": "job_template"
             })
 
-        # Job Templates through projects - Corrected Section
-        for proj in Project.objects.filter(Q(credential=cred) | Q(scm_credential=cred)):
-            for jt in JobTemplate.objects.filter(project_id=proj.id):  # Use project_id
+        # Job Templates through projects - Corrected Section (BOTH filters)
+        for proj in Project.objects.filter(Q(credential_id=cred.id) | Q(scm_credential_id=cred.id)):
+            for jt in JobTemplate.objects.filter(project_id=proj.id):
                 cred_info["related_job_templates"].append({
                     "id": jt.id,
                     "name": jt.name,
