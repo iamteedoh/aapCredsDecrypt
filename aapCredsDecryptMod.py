@@ -117,7 +117,7 @@ def decrypt_credentials_by_type(cred_type):
                     })
 
 
-        # Job Templates
+        # Job Templates (direct)
         for jt in JobTemplate.objects.filter(credential=cred):
             cred_info["related_job_templates"].append({
                 "id": jt.id,
@@ -125,9 +125,9 @@ def decrypt_credentials_by_type(cred_type):
                 "type": "job_template"
             })
 
-        # Job Templates through projects.
+        # Job Templates through projects - Corrected Section
         for proj in Project.objects.filter(Q(credential=cred) | Q(scm_credential=cred)):
-            for jt in JobTemplate.objects.filter(project=proj):
+            for jt in JobTemplate.objects.filter(project_id=proj.id):  # Use project_id
                 cred_info["related_job_templates"].append({
                     "id": jt.id,
                     "name": jt.name,
