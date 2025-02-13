@@ -22,7 +22,7 @@ except ImportError:
 
 print("DEBUG: Past the try/except. About to define functions.")
 
-# Encrypted fields we want to attempt to decrypt
+# Encrypted fields that should be decrypted.
 SECRET_FIELDS = [
     "password",
     "ssh_key_data",
@@ -35,9 +35,16 @@ SECRET_FIELDS = [
     "security_token",
 ]
 
+def list_used_credential_types():
+    """
+    Return a queryset of CredentialTypes that are actively used by at least one Credential.
+    """
+    used_ct_ids = Credential.objects.values_list("credential_type_id", flat=True).distinct()
+    return CredentialType.objects.filter(id__in=used_ct_ids)
+
 def get_teams_from_role(role):
     """
-    Dynamically determine the teams associated with a Role object.
+    Return the list of teams associated with the given Role.
     Handles differences between AWX/AAP versions.
     """
     teams = []
@@ -57,17 +64,19 @@ def get_teams_from_role(role):
 
 def decrypt_single_credential(cred):
     """
-    Given a Credential object, return a dictionary containing its details
-    along with its inputs (each field includes its internal id, a display label,
-    and its value [decrypted if secret]).
+    Given a Credential object, return a dictionary containing its details and its input fields.
+    Each input field is output as an object with:
+       - id: the internal field name
+       - label: the display label (pulled from the credential type's inputs, if available)
+       - value: the plain or decrypted value
     """
     ct = cred.credential_type
-    # Attempt to load field definitions (labels, etc.) from the credential type's inputs.
+    # Attempt to load field definitions from the credential type's inputs.
     field_defs = {}
     try:
         if isinstance(ct.inputs, dict):
             fields_list = ct.inputs.get("fields", [])
-            # Build a mapping keyed by field id.
+            # Build a mapping keyed by the field id.
             field_defs = { field.get("id"): field for field in fields_list if "id" in field }
     except Exception as e:
         print(f"DEBUG: Unable to load field definitions for credential type {ct.name}: {e}")
@@ -82,7 +91,6 @@ def decrypt_single_credential(cred):
         "organization": None,
         "access_list": [],
         "related_job_templates": [],
-        # "fields" will be a list of objects (each with id, label, and value)
         "fields": [],
     }
 
@@ -92,7 +100,7 @@ def decrypt_single_credential(cred):
             "name": cred.organization.name
         }
 
-    # Build access list for each role (admin, use, read).
+    # Build access list (users and teams) for the three roles.
     for role_attr in ['admin_role', 'use_role', 'read_role']:
         role_obj = getattr(cred, role_attr, None)
         if role_obj:
@@ -111,7 +119,7 @@ def decrypt_single_credential(cred):
                     "role": role_attr.replace('_role', '')
                 })
 
-    # Job Templates directly linked via the many-to-many field "credentials"
+    # Job Templates linked via the many-to-many field "credentials"
     for jt in JobTemplate.objects.filter(credentials=cred):
         cred_info["related_job_templates"].append({
             "id": jt.id,
@@ -119,7 +127,7 @@ def decrypt_single_credential(cred):
             "type": "job_template"
         })
 
-    # Job Templates associated via projects.
+    # Job Templates via associated projects.
     filter_query = Q(credential_id=cred.id)
     if 'scm_credential' in [f.name for f in Project._meta.get_fields()]:
         filter_query |= Q(scm_credential_id=cred.id)
@@ -137,7 +145,6 @@ def decrypt_single_credential(cred):
     fields_output = []
     for key, value in cred.inputs.items():
         if value is not None:
-            # If the field is secret, attempt decryption.
             if key in SECRET_FIELDS:
                 try:
                     actual_value = decrypt_field(cred, key)
@@ -147,7 +154,7 @@ def decrypt_single_credential(cred):
             else:
                 actual_value = value
 
-            # Look up the display label from the field definitions; if not present, default to the key.
+            # Use the display label from field definitions (if available); otherwise, default to the key.
             label = field_defs.get(key, {}).get("label", key)
             fields_output.append({
                 "id": key,
@@ -160,7 +167,7 @@ def decrypt_single_credential(cred):
 
 def decrypt_credentials_by_ids(ids_list):
     """
-    Given a list of credential IDs, decrypt them and return a list of decrypted credentials.
+    Given a list of credential IDs, decrypt and return their details.
     """
     creds = Credential.objects.filter(id__in=ids_list)
     results = []
@@ -170,7 +177,7 @@ def decrypt_credentials_by_ids(ids_list):
 
 def decrypt_all_credentials():
     """
-    Decrypt all credentials in the system.
+    Decrypt and return details for all credentials.
     """
     creds = Credential.objects.all()
     results = []
@@ -180,10 +187,10 @@ def decrypt_all_credentials():
 
 def output_results(decrypted):
     """
-    Output the decrypted credentials either to stdout or to a file per user choice.
+    Prompt the user for output options and display the decrypted credentials.
     """
     if decrypted:
-        # Remove duplicate job template entries per credential.
+        # Remove duplicate job template entries.
         for cred in decrypted:
             unique_jts = {tuple(sorted(d.items())) for d in cred['related_job_templates']}
             cred['related_job_templates'] = [dict(t) for t in unique_jts]
@@ -219,18 +226,62 @@ def output_results(decrypted):
 
 def main():
     print("DEBUG: Entered main()")
-    print("Do you want to decrypt:")
-    print("  a) All credentials")
-    print("  s) Specific credentials (choose from a list)")
-    print("  [Enter] to skip")
-    option = input("Enter 'a' or 's': ").strip().lower()
+    print("Select an option:")
+    print("  1) List all used Credential Types")
+    print("  2) Decrypt ALL credentials")
+    print("  3) Decrypt specific credentials")
+    print("  4) Exit")
+    option = input("Enter option [1-4]: ").strip()
 
-    decrypted = []
-    if option == 'a':
-        print("\nDecrypting ALL credentials...\n")
+    if option == "1":
+        # List used credential types.
+        types = list_used_credential_types()
+        if not types:
+            print("No credential types found.\n")
+        else:
+            print("\nUsed Credential Types:")
+            for ct in types:
+                print(f"  {ct.id}) {ct.name}")
+        cont = input("Do you want to proceed with decryption options? (y/n): ").strip().lower()
+        if cont != "y":
+            print("Exiting.")
+            sys.exit(0)
+        # Fall through to choose decryption options.
+        print("Select decryption option:")
+        print("  a) Decrypt ALL credentials")
+        print("  s) Decrypt specific credentials")
+        decryption_choice = input("Enter 'a' or 's': ").strip().lower()
+        if decryption_choice == "a":
+            decrypted = decrypt_all_credentials()
+            output_results(decrypted)
+        elif decryption_choice == "s":
+            creds = Credential.objects.all().order_by("id")
+            if not creds:
+                print("No credentials found.\n")
+                sys.exit(0)
+            print("\nAvailable Credentials:")
+            for cred in creds:
+                print(f"  {cred.id}) {cred.name} (Type: {cred.credential_type.name})")
+            selection = input("Enter comma separated list of credential IDs to decrypt: ").strip()
+            try:
+                selected_ids = [int(x.strip()) for x in selection.split(",") if x.strip().isdigit()]
+            except Exception as e:
+                print(f"Error processing input: {e}")
+                sys.exit(1)
+            if not selected_ids:
+                print("No valid credential IDs entered. Exiting.\n")
+                sys.exit(0)
+            decrypted = decrypt_credentials_by_ids(selected_ids)
+            output_results(decrypted)
+        else:
+            print("Invalid decryption option. Exiting.")
+            sys.exit(0)
+
+    elif option == "2":
         decrypted = decrypt_all_credentials()
-    elif option == 's':
-        # List available credentials.
+        output_results(decrypted)
+
+    elif option == "3":
         creds = Credential.objects.all().order_by("id")
         if not creds:
             print("No credentials found.\n")
@@ -247,13 +298,16 @@ def main():
         if not selected_ids:
             print("No valid credential IDs entered. Exiting.\n")
             sys.exit(0)
-        print("\nDecrypting selected credentials...\n")
         decrypted = decrypt_credentials_by_ids(selected_ids)
-    else:
-        print("\nSkipping credential decryption.\n")
+        output_results(decrypted)
+
+    elif option == "4":
+        print("Exiting.")
         sys.exit(0)
 
-    output_results(decrypted)
+    else:
+        print("Invalid option. Exiting.")
+        sys.exit(0)
 
 # For interactive environments like AWX's shell_plus, call main() directly.
 main()
