@@ -84,7 +84,8 @@ def decrypt_credentials_by_type(cred_type):
             "organization": None,
             "access_list": [],
             "related_job_templates": [],
-            "decrypted_fields": {},
+            # New key that displays all input fields (decrypted if needed)
+            "fields": {},
         }
 
         # Organization info
@@ -96,10 +97,10 @@ def decrypt_credentials_by_type(cred_type):
 
         # Build the access list for users and teams
         for role_attr in ['admin_role', 'use_role', 'read_role']:
-            role = getattr(cred, role_attr, None)
-            if role:
+            role_obj = getattr(cred, role_attr, None)
+            if role_obj:
                 # Add users
-                for user in role.members.all():
+                for user in role_obj.members.all():
                     cred_info["access_list"].append({
                         "type": "user",
                         "id": user.id,
@@ -107,7 +108,7 @@ def decrypt_credentials_by_type(cred_type):
                         "role": role_attr.replace('_role', '')
                     })
                 # Add teams using our helper function
-                for team in get_teams_from_role(role):
+                for team in get_teams_from_role(role_obj):
                     cred_info["access_list"].append({
                         "type": "team",
                         "id": team.id,
@@ -124,7 +125,6 @@ def decrypt_credentials_by_type(cred_type):
             })
 
         # Job Templates through projects referencing this credential.
-        # Build a filter query for projects with a direct credential link.
         filter_query = Q(credential_id=cred.id)
         # If the Project model has an 'scm_credential' field, include that in the query.
         if 'scm_credential' in [f.name for f in Project._meta.get_fields()]:
@@ -139,15 +139,23 @@ def decrypt_credentials_by_type(cred_type):
                     "project_name": proj.name
                 })
 
-        # Attempt to decrypt fields that are present in cred.inputs
-        for field_name in SECRET_FIELDS:
-            if field_name in cred.inputs:
-                try:
-                    value = decrypt_field(cred, field_name)
-                except Exception as e:
-                    print(f"ERROR: Failed to decrypt field {field_name} for credential {cred.id}: {e}")
-                    value = None
-                cred_info["decrypted_fields"][field_name] = value
+        # Process all credential input fields.
+        # For keys that are in SECRET_FIELDS, attempt to decrypt the value.
+        # For all others, just display the raw value.
+        fields_output = {}
+        for key, value in cred.inputs.items():
+            # Display the field if it has a non-null value.
+            if value is not None:
+                if key in SECRET_FIELDS:
+                    try:
+                        dec_val = decrypt_field(cred, key)
+                    except Exception as e:
+                        print(f"ERROR: Failed to decrypt field {key} for credential {cred.id}: {e}")
+                        dec_val = None
+                    fields_output[key] = dec_val
+                else:
+                    fields_output[key] = value
+        cred_info["fields"] = fields_output
 
         results.append(cred_info)
 
