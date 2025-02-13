@@ -119,7 +119,7 @@ def decrypt_single_credential(cred):
                     "role": role_attr.replace('_role', '')
                 })
 
-    # Job Templates linked via the many-to-many field "credentials"
+    # Job Templates directly linked via the many-to-many field "credentials"
     for jt in JobTemplate.objects.filter(credentials=cred):
         cred_info["related_job_templates"].append({
             "id": jt.id,
@@ -127,7 +127,7 @@ def decrypt_single_credential(cred):
             "type": "job_template"
         })
 
-    # Job Templates via associated projects.
+    # Job Templates associated via projects.
     filter_query = Q(credential_id=cred.id)
     if 'scm_credential' in [f.name for f in Project._meta.get_fields()]:
         filter_query |= Q(scm_credential_id=cred.id)
@@ -205,8 +205,8 @@ def output_results(decrypted):
         ).strip()
 
         if choice not in ["1", "2", "3"]:
-            print("Invalid choice. Exiting.\n")
-            sys.exit(0)
+            print("Invalid choice. Returning to main menu.\n")
+            return
 
         if choice in ["1", "3"]:
             print("\n===== DECRYPTED CREDENTIALS =====")
@@ -225,40 +225,38 @@ def output_results(decrypted):
         print("\nNo credentials to display or export.\n")
 
 def main():
-    print("DEBUG: Entered main()")
-    print("Select an option:")
-    print("  1) List all used Credential Types")
-    print("  2) Decrypt ALL credentials")
-    print("  3) Decrypt specific credentials")
-    print("  4) Exit")
-    option = input("Enter option [1-4]: ").strip()
+    while True:
+        print("-------------------------------------------------")
+        print("Main Menu:")
+        print("  1) List all used Credential Types")
+        print("  2) Decrypt ALL credentials")
+        print("  3) Decrypt specific credentials")
+        print("  4) Exit")
+        option = input("Enter option [1-4]: ").strip()
 
-    if option == "1":
-        # List used credential types.
-        types = list_used_credential_types()
-        if not types:
-            print("No credential types found.\n")
-        else:
-            print("\nUsed Credential Types:")
-            for ct in types:
-                print(f"  {ct.id}) {ct.name}")
-        cont = input("Do you want to proceed with decryption options? (y/n): ").strip().lower()
-        if cont != "y":
-            print("Exiting.")
-            sys.exit(0)
-        # Fall through to choose decryption options.
-        print("Select decryption option:")
-        print("  a) Decrypt ALL credentials")
-        print("  s) Decrypt specific credentials")
-        decryption_choice = input("Enter 'a' or 's': ").strip().lower()
-        if decryption_choice == "a":
+        if option == "1":
+            types = list_used_credential_types()
+            if not types:
+                print("No credential types found.\n")
+            else:
+                print("\nUsed Credential Types:")
+                for ct in types:
+                    print(f"  {ct.id}) {ct.name}")
+                print()
+            input("Press Enter to return to the main menu...")
+
+        elif option == "2":
+            print("\nDecrypting ALL credentials...\n")
             decrypted = decrypt_all_credentials()
             output_results(decrypted)
-        elif decryption_choice == "s":
+            input("Press Enter to return to the main menu...")
+
+        elif option == "3":
             creds = Credential.objects.all().order_by("id")
             if not creds:
                 print("No credentials found.\n")
-                sys.exit(0)
+                input("Press Enter to return to the main menu...")
+                continue
             print("\nAvailable Credentials:")
             for cred in creds:
                 print(f"  {cred.id}) {cred.name} (Type: {cred.credential_type.name})")
@@ -267,47 +265,23 @@ def main():
                 selected_ids = [int(x.strip()) for x in selection.split(",") if x.strip().isdigit()]
             except Exception as e:
                 print(f"Error processing input: {e}")
-                sys.exit(1)
+                input("Press Enter to return to the main menu...")
+                continue
             if not selected_ids:
-                print("No valid credential IDs entered. Exiting.\n")
-                sys.exit(0)
+                print("No valid credential IDs entered.")
+                input("Press Enter to return to the main menu...")
+                continue
+            print("\nDecrypting selected credentials...\n")
             decrypted = decrypt_credentials_by_ids(selected_ids)
             output_results(decrypted)
+            input("Press Enter to return to the main menu...")
+
+        elif option == "4":
+            print("Exiting.")
+            break
+
         else:
-            print("Invalid decryption option. Exiting.")
-            sys.exit(0)
-
-    elif option == "2":
-        decrypted = decrypt_all_credentials()
-        output_results(decrypted)
-
-    elif option == "3":
-        creds = Credential.objects.all().order_by("id")
-        if not creds:
-            print("No credentials found.\n")
-            sys.exit(0)
-        print("\nAvailable Credentials:")
-        for cred in creds:
-            print(f"  {cred.id}) {cred.name} (Type: {cred.credential_type.name})")
-        selection = input("Enter comma separated list of credential IDs to decrypt: ").strip()
-        try:
-            selected_ids = [int(x.strip()) for x in selection.split(",") if x.strip().isdigit()]
-        except Exception as e:
-            print(f"Error processing input: {e}")
-            sys.exit(1)
-        if not selected_ids:
-            print("No valid credential IDs entered. Exiting.\n")
-            sys.exit(0)
-        decrypted = decrypt_credentials_by_ids(selected_ids)
-        output_results(decrypted)
-
-    elif option == "4":
-        print("Exiting.")
-        sys.exit(0)
-
-    else:
-        print("Invalid option. Exiting.")
-        sys.exit(0)
+            print("Invalid option. Please try again.\n")
 
 # For interactive environments like AWX's shell_plus, call main() directly.
 main()
