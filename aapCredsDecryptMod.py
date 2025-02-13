@@ -38,15 +38,19 @@ SECRET_FIELDS = [
 ENCRYPTION_PREFIX = "$encrypted$UTF8$AESCBC$"
 
 # Global flag to determine whether to remove the encryption prefix.
-REMOVE_PREFIX = True  # default value
+REMOVE_PREFIX = True  # Default value
 
 def remove_encryption_prefix(value):
     """
     If REMOVE_PREFIX is True and the given value is a string that starts with the known encryption prefix,
-    remove the prefix. Otherwise, return the value unchanged.
+    remove the prefix. A debug message is printed to verify the change.
     """
     if REMOVE_PREFIX and isinstance(value, str) and value.startswith(ENCRYPTION_PREFIX):
-        return value[len(ENCRYPTION_PREFIX):]
+        new_val = value[len(ENCRYPTION_PREFIX):]
+        print(f"DEBUG: remove_encryption_prefix - Removed prefix. Before: {value[:40]}... After: {new_val[:40]}...")
+        return new_val
+    else:
+        print(f"DEBUG: remove_encryption_prefix - No prefix removal. REMOVE_PREFIX={REMOVE_PREFIX}, value starts with prefix: {isinstance(value, str) and value.startswith(ENCRYPTION_PREFIX)}")
     return value
 
 def list_used_credential_types():
@@ -295,7 +299,6 @@ def main():
             input("Press Enter to return to the main menu...")
 
         elif option == "4":
-            # Toggle the removal of the encryption prefix.
             REMOVE_PREFIX = not REMOVE_PREFIX
             print("Removal of encryption prefix is now {}.".format("ON" if REMOVE_PREFIX else "OFF"))
             input("Press Enter to return to the main menu...")
