@@ -65,20 +65,21 @@ def get_teams_from_role(role):
 def decrypt_credentials_by_type(cred_type):
     """
     Decrypt all credentials matching the provided CredentialType.
+    For each credential, this function extracts all input fields and uses the credential type's inputs
+    schema to include the display label along with the internal id and value (decrypted if needed).
     Returns a list of dictionaries containing credential info.
-    For each credential, it extracts all input fields along with their display labels from the
-    credential type definition (if available).
     """
     creds = Credential.objects.filter(credential_type=cred_type)
     results = []
 
     # Attempt to load field definitions from the credential type's inputs schema.
-    # Many AWX installations define this in a "fields" key.
+    # The API returns this as a dictionary with a "fields" key that is a list.
     field_defs = {}
     try:
-        # If the inputs are stored as a dict, look for a "fields" key.
         if isinstance(cred_type.inputs, dict):
-            field_defs = cred_type.inputs.get("fields", {})
+            fields_list = cred_type.inputs.get("fields", [])
+            # Convert the list of field definitions into a mapping keyed by field id.
+            field_defs = {field.get("id"): field for field in fields_list if "id" in field}
     except Exception as e:
         print(f"DEBUG: Unable to load input field definitions for credential type {cred_type.name}: {e}")
         field_defs = {}
@@ -103,7 +104,7 @@ def decrypt_credentials_by_type(cred_type):
                 "name": cred.organization.name
             }
 
-        # Build the access list for users and teams
+        # Build access list for users and teams.
         for role_attr in ['admin_role', 'use_role', 'read_role']:
             role_obj = getattr(cred, role_attr, None)
             if role_obj:
@@ -146,13 +147,13 @@ def decrypt_credentials_by_type(cred_type):
 
         # Process all credential input fields.
         # For each key in cred.inputs, output an object with:
-        #   - id: the field's internal name
-        #   - label: the display label (if defined in the credential type's inputs; otherwise the id)
-        #   - value: the decrypted value if needed, or the plain value.
+        #   - id: the field's internal name.
+        #   - label: the display label from the credential type's field definitions (if available).
+        #   - value: the decrypted value if the field is secret, or the plain value.
         fields_output = []
         for key, value in cred.inputs.items():
             if value is not None:
-                # Determine the value (decrypt if it is a secret field)
+                # Decrypt if the key is considered secret.
                 if key in SECRET_FIELDS:
                     try:
                         actual_value = decrypt_field(cred, key)
@@ -162,10 +163,8 @@ def decrypt_credentials_by_type(cred_type):
                 else:
                     actual_value = value
 
-                # Look up the display label from the credential type's field definitions
-                label = key  # default label if none is defined
-                if key in field_defs and isinstance(field_defs[key], dict):
-                    label = field_defs[key].get("label", key)
+                # Use the label from the field definitions, if available.
+                label = field_defs.get(key, {}).get("label", key)
 
                 fields_output.append({
                     "id": key,
