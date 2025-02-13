@@ -35,6 +35,17 @@ SECRET_FIELDS = [
     "security_token",
 ]
 
+ENCRYPTION_PREFIX = "$encrypted$UTF8$AESCBC$"
+
+def remove_encryption_prefix(value):
+    """
+    If the given value is a string that starts with the known encryption prefix,
+    remove the prefix.
+    """
+    if isinstance(value, str) and value.startswith(ENCRYPTION_PREFIX):
+        return value[len(ENCRYPTION_PREFIX):]
+    return value
+
 def list_used_credential_types():
     """
     Return a queryset of CredentialTypes that are actively used by at least one Credential.
@@ -68,7 +79,7 @@ def decrypt_single_credential(cred):
     Each input field is output as an object with:
        - id: the internal field name
        - label: the display label (pulled from the credential type's inputs, if available)
-       - value: the plain or decrypted value
+       - value: the plain or decrypted value (with encryption prefix removed)
     """
     ct = cred.credential_type
     # Attempt to load field definitions from the credential type's inputs.
@@ -148,6 +159,8 @@ def decrypt_single_credential(cred):
             if key in SECRET_FIELDS:
                 try:
                     actual_value = decrypt_field(cred, key)
+                    # Remove the encryption prefix if it exists.
+                    actual_value = remove_encryption_prefix(actual_value)
                 except Exception as e:
                     print(f"ERROR: Failed to decrypt field {key} for credential {cred.id}: {e}")
                     actual_value = None
