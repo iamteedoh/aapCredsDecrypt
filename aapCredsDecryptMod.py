@@ -283,5 +283,6 @@ def main():
         else:
             print("Invalid option. Please try again.\n")
 
-# Fo
+# For interactive environments like AWX's shell_plus, call main() directly.
+main()
 
