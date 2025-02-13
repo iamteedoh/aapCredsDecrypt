@@ -49,19 +49,15 @@ def get_teams_from_role(role):
     """
     teams = []
     if hasattr(role, 'team_set'):
-        # Newer AWX/AAP versions
         teams = list(role.team_set.all())
     elif hasattr(role, 'teams'):
-        # Older AWX/AAP versions
         teams = list(role.teams.all())
     else:
-        # Fallback: use model introspection
         for related_object in role._meta.related_objects:
             if related_object.related_model == Team:
                 filter_kwargs = {related_object.field.name: role}
                 teams = list(Team.objects.filter(**filter_kwargs))
-                break  # Use the first matching relationship
-
+                break
     if not teams:
         print(f"WARNING: Could not find related teams for role: {role}.  Skipping team access.")
     return teams
@@ -70,9 +66,22 @@ def decrypt_credentials_by_type(cred_type):
     """
     Decrypt all credentials matching the provided CredentialType.
     Returns a list of dictionaries containing credential info.
+    For each credential, it extracts all input fields along with their display labels from the
+    credential type definition (if available).
     """
     creds = Credential.objects.filter(credential_type=cred_type)
     results = []
+
+    # Attempt to load field definitions from the credential type's inputs schema.
+    # Many AWX installations define this in a "fields" key.
+    field_defs = {}
+    try:
+        # If the inputs are stored as a dict, look for a "fields" key.
+        if isinstance(cred_type.inputs, dict):
+            field_defs = cred_type.inputs.get("fields", {})
+    except Exception as e:
+        print(f"DEBUG: Unable to load input field definitions for credential type {cred_type.name}: {e}")
+        field_defs = {}
 
     for cred in creds:
         cred_info = {
@@ -84,11 +93,10 @@ def decrypt_credentials_by_type(cred_type):
             "organization": None,
             "access_list": [],
             "related_job_templates": [],
-            # New key that displays all input fields (decrypted if needed)
-            "fields": {},
+            # "fields" will be a list of objects with id, label, and value.
+            "fields": [],
         }
 
-        # Organization info
         if cred.organization:
             cred_info["organization"] = {
                 "id": cred.organization.id,
@@ -99,7 +107,6 @@ def decrypt_credentials_by_type(cred_type):
         for role_attr in ['admin_role', 'use_role', 'read_role']:
             role_obj = getattr(cred, role_attr, None)
             if role_obj:
-                # Add users
                 for user in role_obj.members.all():
                     cred_info["access_list"].append({
                         "type": "user",
@@ -107,7 +114,6 @@ def decrypt_credentials_by_type(cred_type):
                         "username": user.username,
                         "role": role_attr.replace('_role', '')
                     })
-                # Add teams using our helper function
                 for team in get_teams_from_role(role_obj):
                     cred_info["access_list"].append({
                         "type": "team",
@@ -126,7 +132,6 @@ def decrypt_credentials_by_type(cred_type):
 
         # Job Templates through projects referencing this credential.
         filter_query = Q(credential_id=cred.id)
-        # If the Project model has an 'scm_credential' field, include that in the query.
         if 'scm_credential' in [f.name for f in Project._meta.get_fields()]:
             filter_query |= Q(scm_credential_id=cred.id)
         for proj in Project.objects.filter(filter_query):
@@ -140,21 +145,33 @@ def decrypt_credentials_by_type(cred_type):
                 })
 
         # Process all credential input fields.
-        # For keys that are in SECRET_FIELDS, attempt to decrypt the value.
-        # For all others, just display the raw value.
-        fields_output = {}
+        # For each key in cred.inputs, output an object with:
+        #   - id: the field's internal name
+        #   - label: the display label (if defined in the credential type's inputs; otherwise the id)
+        #   - value: the decrypted value if needed, or the plain value.
+        fields_output = []
         for key, value in cred.inputs.items():
-            # Display the field if it has a non-null value.
             if value is not None:
+                # Determine the value (decrypt if it is a secret field)
                 if key in SECRET_FIELDS:
                     try:
-                        dec_val = decrypt_field(cred, key)
+                        actual_value = decrypt_field(cred, key)
                     except Exception as e:
                         print(f"ERROR: Failed to decrypt field {key} for credential {cred.id}: {e}")
-                        dec_val = None
-                    fields_output[key] = dec_val
+                        actual_value = None
                 else:
-                    fields_output[key] = value
+                    actual_value = value
+
+                # Look up the display label from the credential type's field definitions
+                label = key  # default label if none is defined
+                if key in field_defs and isinstance(field_defs[key], dict):
+                    label = field_defs[key].get("label", key)
+
+                fields_output.append({
+                    "id": key,
+                    "label": label,
+                    "value": actual_value,
+                })
         cred_info["fields"] = fields_output
 
         results.append(cred_info)
@@ -176,8 +193,6 @@ print("DEBUG: About to enter main()")
 
 def main():
     print("DEBUG: Entered main()")
-
-    # 1) Ask the user whether to list used Credential Types.
     show_types = input("Do you want to list all used Credential Types? (y/n): ").strip().lower()
     if show_types == "y":
         used_types = list_used_credential_types()
@@ -186,7 +201,6 @@ def main():
             print(f"  - ID: {ct.id}, Name: {ct.name}")
         print()
 
-    # 2) Ask the user whether to decrypt specific or all credentials.
     print("Do you want to see decrypted credentials for a specific Credential Type or for all used credentials?")
     show_creds = input("Enter 's' for specific, 'a' for all, or press [Enter] to skip: ").strip().lower()
     all_decrypted = []
@@ -198,7 +212,6 @@ def main():
             sys.exit(0)
 
         type_dict = {str(ct.id): ct for ct in used_types}
-
         print("Available Credential Types:")
         for ct in used_types:
             print(f"  {ct.id}) {ct.name}")
@@ -212,23 +225,18 @@ def main():
         else:
             print("Invalid Credential Type ID selected. Exiting.\n")
             sys.exit(0)
-
     elif show_creds == "a":
         print("\nDecrypting credentials for ALL used credential types...\n")
         all_decrypted = decrypt_all_used_types()
-
     else:
         print("\nSkipping credential decryption.\n")
 
-    # 3) Output the results if any credentials were decrypted.
     if all_decrypted:
-        # Remove duplicate job template entries for each credential.
         for cred in all_decrypted:
             unique_jts = {tuple(sorted(d.items())) for d in cred['related_job_templates']}
             cred['related_job_templates'] = [dict(t) for t in unique_jts]
 
         output_json = json.dumps(all_decrypted, indent=2)
-
         choice = input(
             "How do you want to output the decrypted credentials?\n"
             "  1) Standard Output\n"
