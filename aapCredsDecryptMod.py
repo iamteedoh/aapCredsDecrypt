@@ -37,12 +37,15 @@ SECRET_FIELDS = [
 
 ENCRYPTION_PREFIX = "$encrypted$UTF8$AESCBC$"
 
+# Global flag to determine whether to remove the encryption prefix.
+REMOVE_PREFIX = True  # default value
+
 def remove_encryption_prefix(value):
     """
-    If the given value is a string that starts with the known encryption prefix,
-    remove the prefix.
+    If REMOVE_PREFIX is True and the given value is a string that starts with the known encryption prefix,
+    remove the prefix. Otherwise, return the value unchanged.
     """
-    if isinstance(value, str) and value.startswith(ENCRYPTION_PREFIX):
+    if REMOVE_PREFIX and isinstance(value, str) and value.startswith(ENCRYPTION_PREFIX):
         return value[len(ENCRYPTION_PREFIX):]
     return value
 
@@ -79,7 +82,7 @@ def decrypt_single_credential(cred):
     Each input field is output as an object with:
        - id: the internal field name
        - label: the display label (pulled from the credential type's inputs, if available)
-       - value: the plain or decrypted value (with encryption prefix removed)
+       - value: the plain or decrypted value (with encryption prefix removed if desired)
     """
     ct = cred.credential_type
     # Attempt to load field definitions from the credential type's inputs.
@@ -159,7 +162,7 @@ def decrypt_single_credential(cred):
             if key in SECRET_FIELDS:
                 try:
                     actual_value = decrypt_field(cred, key)
-                    # Remove the encryption prefix if it exists.
+                    # Optionally remove the encryption prefix based on the global flag.
                     actual_value = remove_encryption_prefix(actual_value)
                 except Exception as e:
                     print(f"ERROR: Failed to decrypt field {key} for credential {cred.id}: {e}")
@@ -238,14 +241,16 @@ def output_results(decrypted):
         print("\nNo credentials to display or export.\n")
 
 def main():
+    global REMOVE_PREFIX
     while True:
         print("-------------------------------------------------")
         print("Main Menu:")
         print("  1) List all used Credential Types")
         print("  2) Decrypt ALL credentials")
         print("  3) Decrypt specific credentials")
-        print("  4) Exit")
-        option = input("Enter option [1-4]: ").strip()
+        print("  4) Toggle removal of encryption prefix (currently {})".format("ON" if REMOVE_PREFIX else "OFF"))
+        print("  5) Exit")
+        option = input("Enter option [1-5]: ").strip()
 
         if option == "1":
             types = list_used_credential_types()
@@ -290,6 +295,12 @@ def main():
             input("Press Enter to return to the main menu...")
 
         elif option == "4":
+            # Toggle the removal of the encryption prefix.
+            REMOVE_PREFIX = not REMOVE_PREFIX
+            print("Removal of encryption prefix is now {}.".format("ON" if REMOVE_PREFIX else "OFF"))
+            input("Press Enter to return to the main menu...")
+
+        elif option == "5":
             print("Exiting.")
             break
 
