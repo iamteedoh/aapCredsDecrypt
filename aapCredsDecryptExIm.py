@@ -76,7 +76,7 @@ def decrypt_single_credential(cred):
     try:
         if isinstance(ct.inputs, dict):
             fields_list = ct.inputs.get("fields", [])
-            field_defs = { field.get("id"): field for field in fields_list if "id" in field }
+            field_defs = {field.get("id"): field for field in fields_list if "id" in field}
     except Exception as e:
         print(f"DEBUG: Unable to load field definitions for credential type {ct.name}: {e}")
         field_defs = {}
@@ -222,9 +222,9 @@ def output_results(decrypted):
         print("\nNo credentials to display or export.\n")
 
 #
-# Import functionality with duplicate check.
+# Import functionality with duplicate check and master list.
 #
-def import_credential(cred_data):
+def import_credential(cred_data, duplicates):
     """
     Given a credential dictionary (from the JSON export), import it into AWX.
     This function:
@@ -234,6 +234,7 @@ def import_credential(cred_data):
       - Converts the "fields" list into an "inputs" dictionary.
       - Creates a new Credential if it doesn't already exist.
       - Attempts to re-establish the access_list and related_job_templates.
+    The 'duplicates' list is used to record names of credentials that were skipped.
     """
     name = cred_data.get("name")
     ct_name = cred_data.get("credential_type")
@@ -251,9 +252,10 @@ def import_credential(cred_data):
         except Organization.DoesNotExist:
             print(f"Organization with id {org_data.get('id')} not found for credential '{name}'. Using None.")
 
-    # Check if a credential with the same name, type, and organization already exists.
+    # Check for existing credential.
     if Credential.objects.filter(name=name, credential_type=ct, organization=org).exists():
         print(f"Credential '{name}' already exists. Skipping import.")
+        duplicates.append(name)
         return None
 
     # Build the inputs dictionary from the "fields" list.
@@ -278,9 +280,9 @@ def import_credential(cred_data):
         print(f"Error importing credential '{name}': {e}")
         return None
 
-    # Re-establish access_list (users and teams).
+    # Re-establish access_list.
     for access in cred_data.get("access_list", []):
-        role_name = access.get("role")  # Expected to be "admin", "use", or "read"
+        role_name = access.get("role")  # Expected: "admin", "use", or "read"
         if access.get("type") == "user":
             try:
                 user = User.objects.get(id=access.get("id"))
@@ -318,6 +320,7 @@ def import_credential(cred_data):
 def import_credentials_from_file(filename):
     """
     Import credentials from a JSON file.
+    Also prints a master list of credentials that were skipped due to duplicates.
     """
     try:
         with open(filename, "r") as f:
@@ -327,10 +330,15 @@ def import_credentials_from_file(filename):
         return
 
     imported_count = 0
+    duplicates = []
     for cred_data in creds_data:
-        if import_credential(cred_data):
+        if import_credential(cred_data, duplicates):
             imported_count += 1
     print(f"Imported {imported_count} credentials.")
+    if duplicates:
+        print("The following credentials were skipped (duplicates found):")
+        for dup in duplicates:
+            print(f"  - {dup}")
 
 #
 # Main menu loop
