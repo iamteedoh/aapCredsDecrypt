@@ -68,7 +68,7 @@ def decrypt_single_credential(cred):
     Each input field is output as an object with:
        - id: the internal field name
        - label: the display label (pulled from the credential type's inputs, if available)
-       - value: the plain or decrypted value (as returned by decrypt_field, with no prefix modification)
+       - value: the plain or decrypted value (as returned by decrypt_field)
     """
     ct = cred.credential_type
     # Attempt to load field definitions from the credential type's inputs.
@@ -76,7 +76,6 @@ def decrypt_single_credential(cred):
     try:
         if isinstance(ct.inputs, dict):
             fields_list = ct.inputs.get("fields", [])
-            # Build a mapping keyed by the field id.
             field_defs = { field.get("id"): field for field in fields_list if "id" in field }
     except Exception as e:
         print(f"DEBUG: Unable to load field definitions for credential type {ct.name}: {e}")
@@ -100,7 +99,7 @@ def decrypt_single_credential(cred):
             "name": cred.organization.name
         }
 
-    # Build access list (users and teams) for the three roles.
+    # Build access list for users and teams.
     for role_attr in ['admin_role', 'use_role', 'read_role']:
         role_obj = getattr(cred, role_attr, None)
         if role_obj:
@@ -154,7 +153,6 @@ def decrypt_single_credential(cred):
             else:
                 actual_value = value
 
-            # Use the display label from field definitions (if available); otherwise, default to the key.
             label = field_defs.get(key, {}).get("label", key)
             fields_output.append({
                 "id": key,
@@ -190,7 +188,6 @@ def output_results(decrypted):
     Prompt the user for output options and display the decrypted credentials.
     """
     if decrypted:
-        # Remove duplicate job template entries.
         for cred in decrypted:
             unique_jts = {tuple(sorted(d.items())) for d in cred['related_job_templates']}
             cred['related_job_templates'] = [dict(t) for t in unique_jts]
@@ -225,7 +222,7 @@ def output_results(decrypted):
         print("\nNo credentials to display or export.\n")
 
 #
-# Import functionality
+# Import functionality with duplicate check.
 #
 def import_credential(cred_data):
     """
@@ -233,8 +230,9 @@ def import_credential(cred_data):
     This function:
       - Looks up the CredentialType by name.
       - Looks up the Organization by id (if provided).
+      - Checks for an existing credential with the same name, type, and organization.
       - Converts the "fields" list into an "inputs" dictionary.
-      - Creates a new Credential.
+      - Creates a new Credential if it doesn't already exist.
       - Attempts to re-establish the access_list and related_job_templates.
     """
     name = cred_data.get("name")
@@ -251,7 +249,13 @@ def import_credential(cred_data):
         try:
             org = Organization.objects.get(id=org_data.get("id"))
         except Organization.DoesNotExist:
-            print(f"Organization with id {org_data.get('id')} not found for credential '{name}'.")
+            print(f"Organization with id {org_data.get('id')} not found for credential '{name}'. Using None.")
+
+    # Check if a credential with the same name, type, and organization already exists.
+    if Credential.objects.filter(name=name, credential_type=ct, organization=org).exists():
+        print(f"Credential '{name}' already exists. Skipping import.")
+        return None
+
     # Build the inputs dictionary from the "fields" list.
     inputs = {}
     for field in cred_data.get("fields", []):
@@ -260,7 +264,7 @@ def import_credential(cred_data):
         if field_id:
             inputs[field_id] = field_value
 
-    # Create the Credential.
+    # Create the new Credential.
     try:
         cred_obj = Credential(
             name=name,
@@ -274,7 +278,7 @@ def import_credential(cred_data):
         print(f"Error importing credential '{name}': {e}")
         return None
 
-    # Import access_list: Assign users/teams to the appropriate role if possible.
+    # Re-establish access_list (users and teams).
     for access in cred_data.get("access_list", []):
         role_name = access.get("role")  # Expected to be "admin", "use", or "read"
         if access.get("type") == "user":
@@ -283,7 +287,6 @@ def import_credential(cred_data):
             except Exception as e:
                 print(f"Could not find user with id {access.get('id')} for credential '{name}'.")
                 continue
-            # Assign user to the corresponding role.
             if role_name == "admin" and hasattr(cred_obj, "admin_role"):
                 cred_obj.admin_role.members.add(user)
             elif role_name == "use" and hasattr(cred_obj, "use_role"):
@@ -303,7 +306,7 @@ def import_credential(cred_data):
             elif role_name == "read" and hasattr(cred_obj, "read_role"):
                 cred_obj.read_role.team_set.add(team)
 
-    # Import related job templates.
+    # Re-establish related job templates.
     for jt_data in cred_data.get("related_job_templates", []):
         try:
             jt = JobTemplate.objects.get(id=jt_data.get("id"))
@@ -399,4 +402,3 @@ def main():
 
 # Run the main menu unconditionally.
 main()
-
