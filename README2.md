@@ -238,31 +238,31 @@ def decrypt_single_credential(cred):
 ```
 
 * This is the core function for decrypting a single `Credential` object. It takes a `Credential` object as input and returns a dictionary containing:
-    ** Basic credential information (ID, name, type, creation/modification timestamps, organization).
-    ** A list of users and teams with access to the credential (the "access list").
-    ** A list of related Job Templates.
-    ** A list of input fields, including decrypted values for sensitive fields.
+    * Basic credential information (ID, name, type, creation/modification timestamps, organization).
+    * A list of users and teams with access to the credential (the "access list").
+    * A list of related Job Templates.
+    * A list of input fields, including decrypted values for sensitive fields.
 * `ct = cred.credential_type`: Retrieves the `CredentialType` associated with the credential.
 * `field_defs = {}`: Initializes dict to store input field information (id, label).
 * The `try...except` block gets credential labels from the credential type's inputs.
 * `cred_info = { ... }`: Initializes the dictionary that will hold the decrypted credential data.
 * `if cred.organization:`: Populates organization details if the credential is part of an organization.
 * `for role_attr in ['admin_role', 'use_role', 'read_role']`: Iterates through the possible role attributes (admin, use, read) associated with a credential.
-    ** `role_obj = getattr(cred, role_attr, None)`: Gets the `Role` object associated with the current role attribute (e.g., `cred.admin_role`).
-    ** `for user in role_obj.members.all()`: Adds users with this role to the `access_list`.
-    ** `for team in get_teams_from_role(role_obj)`: Adds teams with this role to the `access_list`.
+    * `role_obj = getattr(cred, role_attr, None)`: Gets the `Role` object associated with the current role attribute (e.g., `cred.admin_role`).
+    * `for user in role_obj.members.all()`: Adds users with this role to the `access_list`.
+    * `for team in get_teams_from_role(role_obj)`: Adds teams with this role to the `access_list`.
 * `for jt in JobTemplate.objects.filter(credentials=cred)`: Adds directly related `JobTemplate` objects to the `related_job_templates` list.
 * The next block handles indirect job template relations.
-    ** `filter_query = Q(credential_id=cred.id)`: Starts building a query to find related `Project` objects.
-    ** `if 'scm_credential' in [f.name for f in Project._meta.get_fields()]`: Checks if the project has the scm_credential.
-    ** `filter_query |= Q(scm_credential_id=cred.id)`: Adds a clause to the query to include projects where the credential is used as the SCM credential (if applicable).
-    ** `for proj in Project.objects.filter(filter_query)`: Iterates through projects related to the credential.
-        ** `for jt in JobTemplate.objects.filter(project_id=proj.id)`: Adds job templates associated with the found projects to `related_job_templates`.
+    * `filter_query = Q(credential_id=cred.id)`: Starts building a query to find related `Project` objects.
+    * `if 'scm_credential' in [f.name for f in Project._meta.get_fields()]`: Checks if the project has the scm_credential.
+    * `filter_query |= Q(scm_credential_id=cred.id)`: Adds a clause to the query to include projects where the credential is used as the SCM credential (if applicable).
+    * `for proj in Project.objects.filter(filter_query)`: Iterates through projects related to the credential.
+        * `for jt in JobTemplate.objects.filter(project_id=proj.id)`: Adds job templates associated with the found projects to `related_job_templates`.
 * `for key, value in cred.inputs.items()`: Iterates through the credential's input fields.
-    ** if key in SECRET_FIELDS: Checks if the current field is in the `SECRET_FIELDS` list.
-        ** `actual_value = decrypt_field(cred, key)`: Decrypts the field value using the `decrypt_field` function.
-        ** `except Exception as e`: Handles potential errors during decryption.
-    ** `else: actual_value = value`: If the field is not a secret field, the value is used directly.
+    * if key in SECRET_FIELDS: Checks if the current field is in the `SECRET_FIELDS` list.
+        * `actual_value = decrypt_field(cred, key)`: Decrypts the field value using the `decrypt_field` function.
+        * `except Exception as e`: Handles potential errors during decryption.
+    * `else: actual_value = value`: If the field is not a secret field, the value is used directly.
 * `return cred_info`: Returns the dictionary containing all extracted credential information.
 
 5. `decrypt_credentials_by_ids(ids_list)`
