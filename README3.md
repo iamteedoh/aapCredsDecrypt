@@ -136,6 +136,7 @@ This script is a utility to manage AWX/AAP credentials by decrypting sensitive f
   Given a `Role` object, returns the associated list of `Team` objects.
 - **Implementation:**  
   Handles differences across AWX/AAP versions by checking for attributes like `team_set` or `teams`, or by iterating over the role’s related objects.
+    - If the list of `teams` is empty, it prints a warning message **"WARNING: Could not find related teams for role: ..."**
 
 ### decrypt_single_credential
 - **Purpose:**  
@@ -173,7 +174,7 @@ This script is a utility to manage AWX/AAP credentials by decrypting sensitive f
 - **Purpose:**  
   Imports a single credential from a dictionary derived from a JSON export.
 - **Implementation:**  
-  - Validates existence of the corresponding `CredentialType` and optionally the `Organization`.
+  - Validates existence of the corresponding `Name`, `CredentialType`, and the `Organization`.
   - Checks for an existing credential to avoid duplicates.
   - Converts the “fields” list into an “inputs” dictionary.
   - Creates the new `Credential` object.
@@ -203,7 +204,7 @@ This script is a utility to manage AWX/AAP credentials by decrypting sensitive f
   If you see errors regarding the AWX/AAP models (such as missing imports), ensure you are running the script within the AWX/AAP environment.
   
 - **Decryption Failures:**  
-  If decryption of a specific field fails, the error is logged and the field value will be set to `None`. Check the logs for details.
+  If decryption of a specific field fails, the error is captured and the field value will be set to `None`. Check the output in the console where the interactivity of the program is occurring.
 
 - **File I/O Issues:**  
   Ensure the file paths provided for saving or importing JSON data are accessible and you have the necessary permissions.
@@ -222,6 +223,4 @@ Contributions and improvements to the script are welcome. When submitting change
 ## License
 
 This script is provided "as-is" without any warranty. Users are free to use, modify, and distribute the script, subject to any AWX/AAP licensing restrictions.
-
-```
 
