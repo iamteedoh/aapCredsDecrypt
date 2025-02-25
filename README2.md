@@ -9,15 +9,15 @@ The primary goals of this script are:
 1.  **Credential Auditing:**  Provide a way to inspect *all* credential details, including encrypted fields, in a human-readable format. This is crucial for security audits, troubleshooting, and understanding how credentials are being used.
 2.  **Credential Migration:** Facilitate the migration of credentials between AWX/AAP instances by providing export and import capabilities.
 3.  **Credential Type Discovery:** List all *actively used* credential types within the AWX/AAP instance.
-4. **Credential-Job Template Mapping:** List all Job Templates and Projects associated with a credential, this includes direct and indirect relations.
-5. **Credential-Access Mapping:** Show all users and teams that have access to a specific credential.
+4.  **Credential-Job Template Mapping:** List all Job Templates and Projects associated with a credential, this includes direct and indirect relations.
+5.  **Credential-Access Mapping:** Show all users and teams that have access to a specific credential.
 
 ## Prerequisites
 
-*   **AWX/AAP Environment:** This script *must* be run within a properly configured AWX or AAP environment.  It relies on Django models and utilities specific to these platforms. The recommended way to run it is via the `awx-manage shell_plus` command.
-*   **Administrative Privileges:** You need to be logged in as a user with sufficient privileges to access and modify credentials, organizations, teams, users, and job templates.  Typically, this means being a system administrator.
-*   **Python 3:** The script is intended for Python 3.
-*   **`awx` package**: The `awx` package is required, and should be available inside `awx-manage shell_plus`
+*  **AWX/AAP Environment:** This script *must* be run within a properly configured AWX or AAP environment.  It relies on Django models and utilities specific to these platforms. The recommended way to run it is via the `awx-manage shell_plus` command.
+*  **Administrative Privileges:** You need to be logged in as a user with sufficient privileges to access and modify credentials, organizations, teams, users, and job templates.  Typically, this means being a system administrator.
+*  **Python 3:** The script is intended for Python 3.
+*  **`awx` package**: The `awx` package is required, and should be available inside `awx-manage shell_plus`
 
 ## How to Run
 
@@ -79,6 +79,7 @@ SECRET_FIELDS = [
     "secret_key",
     "security_token",
 ]
+```
 
 * `#!/usr/bin/env python`: Shebang line, indicating the script should run with Python's default environment version.
 * `import sys, json, datetime`: Imports standard Python libraries for system interaction, JSON handling, and date/time manipulation.
@@ -88,7 +89,7 @@ SECRET_FIELDS = [
 * `from django.db.models import Q`: Import used to constructed complex queries for the database.
 * `SECRET_FIELDS`: A list of field names known to contain encrypted data within AWX/AAP credential objects.
 
-2. `list_used_credential_types()`
+### 2. `list_used_credential_types()`
 
 ```python
 def list_used_credential_types():
@@ -103,7 +104,7 @@ def list_used_credential_types():
 * `Credential.objects.values_list("credential_type_id", flat=True).distinct()`: This efficiently retrieves a list of unique `credential_type_id` values from all existing `Credential` objects. `flat=True` ensures a simple list of IDs is returned, rather than a list of tuples.
 * `CredentialType.objects.filter(id__in=used_ct_ids)`: This filters the `CredentialType` objects, returning only those whose IDs are present in the `used_ct_ids` list.
 
-3. `get_teams_from_role()`
+### 3. `get_teams_from_role()`
 
 ```python
 def get_teams_from_role(role):
@@ -132,7 +133,7 @@ def get_teams_from_role(role):
 * `role._meta.related_objects`: If the direct attributes aren't found, this iterates through the role's related objects to find a relationship to the `Team` model.
 * `if not teams`: If there is not team associated with the role a warning is printed to the console.
 
-4. `decrypt_single_credential(cred)`
+### 4. `decrypt_single_credential(cred)`
 
 ```python
 def decrypt_single_credential(cred):
@@ -265,7 +266,7 @@ def decrypt_single_credential(cred):
     * `else: actual_value = value`: If the field is not a secret field, the value is used directly.
 * `return cred_info`: Returns the dictionary containing all extracted credential information.
 
-5. `decrypt_credentials_by_ids(ids_list)`
+### 5. `decrypt_credentials_by_ids(ids_list)`
 
 ```python
 def decrypt_credentials_by_ids(ids_list):
@@ -285,7 +286,7 @@ def decrypt_credentials_by_ids(ids_list):
 * `for cred in creds`: Iterates over each found `Credential`
 * `results.append(decrypt_single_credential(cred))`: Appends result of `decrypt_single_credential`
 
-6. `decrypt_all_credentials()`
+### 6. `decrypt_all_credentials()`
 
 ```python
 def decrypt_all_credentials():
@@ -302,7 +303,7 @@ def decrypt_all_credentials():
 * This function decrypts all credentials in the AWX/AAP instance and returns a list of dictionaries containing the decrypted data.
 * Very similar to `decrypt_credentials_by_ids()`, but retrieves all credentials using `.all()`.
 
-7. `output_results(decrypted)`
+### 7. `output_results(decrypted)`
 
 ```python
 def output_results(decrypted):
