@@ -44,7 +44,7 @@ This script is a utility to manage AWX/AAP credentials by decrypting sensitive f
 - **Decrypt Credentials:** Decrypt secret fields (like passwords and keys) for:
   - All stored credentials.
   - Specific credentials chosen by their IDs.
-- **Import Credentials:** Import credentials back into AWX from a JSON file, with:
+- **Import Credentials:** Import credentials back into AWX/AAP from a JSON file, with:
   - Duplicate checks.
   - Restoration of role memberships and job template associations.
 - **Interactive Output Options:** Choose to display results on screen, export to a file, or both.
@@ -55,28 +55,31 @@ This script is a utility to manage AWX/AAP credentials by decrypting sensitive f
 
 - **AWX/AAP Environment:**  
   This script must run within the AWX/AAP environment because it requires access to AWX-specific Django models and utilities.  
-  _Tip:_ If running from outside, use `awx-manage shell_plus` and execute the script with:
+  
+  _Tip:_ If running from within `awx-manage`, as an elevated user, such as root, run `awx-manage shell_plus` and execute the script with:
   ```
   exec(open("/path/to/aapCredsDecryptExIm.py").read())
   ```
 
 - **Python:**  
-  A compatible Python version installed within the AWX/AAP environment.
+  A compatible Python version (3.x+) installed within the AWX/AAP environment.
   
 - **AWX/AAP Modules:**  
   Ensure that the following modules are available:
   - `awx.main.models` (includes Credential, CredentialType, Organization, Project, JobTemplate, Team, Role, User)
   - `awx.main.utils` (provides `decrypt_field`)
 
+  **Note:** This is done via the `import` of modules within the Python script
+
 ---
 
 ## Installation and Setup
 
-1. **Place the Script:**  
-   Save the script as `aapCredsDecryptExIm.py` on your AWX/AAP server where the required Python environment is active.
+1. **Import the Script:**  
+   Save the script as `aapCredsDecryptExIm.py` or with whatever name you prefer onto your AWX/AAP server where the required Python environment is active. This is typically your `controller node`.
 
-2. **Ensure Permissions:**  
-   Optionally, make the script executable:
+2. **Apply Appropriate Permissions:**  
+   Optionally, make the script executable, if not by default:
    ```
    chmod +x aapCredsDecryptExIm.py
    ```
@@ -96,7 +99,7 @@ This script is a utility to manage AWX/AAP credentials by decrypting sensitive f
    ```
    ./aapCredsDecryptExIm.py
    ```
-   Or from an AWX shell:
+   Or from an AWX shell (recommended due to interactivity):
    ```
    exec(open("/path/to/aapCredsDecryptExIm.py").read())
    ```
@@ -113,7 +116,7 @@ This script is a utility to manage AWX/AAP credentials by decrypting sensitive f
    After decryption, you will be prompted to choose between:
    - Printing the decrypted data to standard output.
    - Saving the decrypted data to a file.
-   - Both printing and saving.
+   - Both, printing and saving.
 
 4. **Import Process:**  
    When importing, the script checks for duplicates (credentials with the same name, type, and organization) and logs those that are skipped.
@@ -190,7 +193,7 @@ This script is a utility to manage AWX/AAP credentials by decrypting sensitive f
 - **Implementation:**  
   - Displays a menu with options to list credential types, decrypt credentials (all or specific), import credentials, or exit.
   - Processes user input and calls the corresponding functions.
-  - Loops continuously until the user chooses to exit.
+  - Loops continuously until the user chooses to exit the program.
 
 ---
 
@@ -212,7 +215,7 @@ This script is a utility to manage AWX/AAP credentials by decrypting sensitive f
 Contributions and improvements to the script are welcome. When submitting changes:
 - Ensure compatibility with the AWX/AAP environment.
 - Update this README accordingly.
-- Provide clear commit messages and document any new features.
+- Provide clear commit messages and document any new features, please. This is VERY IMPORTANT!!!
 
 ---
 
