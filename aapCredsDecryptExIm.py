@@ -20,7 +20,7 @@ except ImportError:
     print("       For example, run 'awx-manage shell_plus' then 'exec(open(\"/path/to/script.py\").read())'")
     sys.exit(1)
 
-print("DEBUG: Past the try/except. About to define functions.")
+print("DEBUG: Passed the try/except. About to define functions.")
 
 # Encrypted fields that should be decrypted.
 SECRET_FIELDS = [
@@ -226,7 +226,7 @@ def output_results(decrypted):
 #
 def import_credential(cred_data, duplicates):
     """
-    Given a credential dictionary (from the JSON export), import it into AWX.
+    Given a credential dictionary (from the JSON export), import it into AWX/AAP.
     This function:
       - Looks up the CredentialType by name.
       - Looks up the Organization by id (if provided).
