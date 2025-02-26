@@ -1,345 +1,226 @@
-# README: AWX/AAP Credential Export and Decryption Script
+# AWX/AAP Credential Decrypt & Import Script
 
-## Overview
+This script is designed for AWX/AAP environments to facilitate the decryption and import of credentials. It provides an interactive menu-based interface to:
+- List all used Credential Types.
+- Decrypt all credentials or selected ones.
+- Import credentials from a JSON file.
 
-This script is designed to be run _within_ an
-[AWX](https://github.com/ansible/awx) or Red Hat Ansible Automation Platform
-(AAP) environment. It interacts with the AWX/AAP internal tools to:
+The script leverages AWX/AAP’s Django ORM and models, including `Credential`, `CredentialType`, `Organization`, `Project`, `JobTemplate`, `Team`, `Role`, and `User`, along with utility functions like `decrypt_field`.
 
-1. List the credential types that are currently in use.
+---
 
-2. Decrypt some or all credentials belonging to those types.
+## Table of Contents
 
-3. Print or save the decrypted data as JSON.
+- [Introduction](#introduction)
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Installation and Setup](#installation-and-setup)
+- [Usage Instructions](#usage-instructions)
+- [Function Details](#function-details)
+  - [list_used_credential_types](#list_used_credential_types)
+  - [get_teams_from_role](#get_teams_from_role)
+  - [decrypt_single_credential](#decrypt_single_credential)
+  - [decrypt_credentials_by_ids](#decrypt_credentials_by_ids)
+  - [decrypt_all_credentials](#decrypt_all_credentials)
+  - [output_results](#output_results)
+  - [import_credential](#import_credential)
+  - [import_credentials_from_file](#import_credentials_from_file)
+  - [main](#main)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
 
-> **Important: This script only works inside the AWX/AAP environment. You cannot
-> run it as a normal Python script from your local machine unless you have a
-> full AWX/AAP environment set up. The specialized `awx-manage shell_plus`
-> environment provides the necessary Python and AWX modules.**
+---
+
+## Introduction
+
+This script is a utility to manage AWX/AAP credentials by decrypting sensitive fields and importing credentials from a JSON file. It is meant to be executed within an AWX/AAP environment where all the necessary Django models and AWX-specific utilities are available.
+
+---
+
+## Features
+
+- **List Credential Types:** Identify which credential types are currently in use.
+- **Decrypt Credentials:** Decrypt secret fields (like passwords and keys) for:
+  - All stored credentials.
+  - Specific credentials chosen by their IDs.
+- **Import Credentials:** Import credentials back into AWX/AAP from a JSON file, with:
+  - Duplicate checks.
+  - Restoration of role memberships and job template associations.
+- **Interactive Output Options:** Choose to display results on screen, export to a file, or both.
 
 ---
 
 ## Prerequisites
 
-1. **An AWX/AAP Environment:** You must already have AWX or Red Hat Ansible
-   Automation Platform installed and accessible.
+- **AWX/AAP Environment:**  
+  This script must run within the AWX/AAP environment because it requires access to AWX-specific Django models and utilities.  
+  
+  _Tip:_ If running from within `awx-manage`, as an elevated user, such as root, run `awx-manage shell_plus` and execute the script with:
+  ```
+  exec(open("/path/to/aapCredsDecryptExIm.py").read())
+  ```
 
-2. **AWX CLI Tools:** This script depends on internal AWX/AAP libraries.
-   Normally, you enter `awx-manage shell_plus` to gain access to the internal
-   environment.
+- **Python:**  
+  A compatible Python version (3.x+) installed within the AWX/AAP environment.
+  
+- **AWX/AAP Modules:**  
+  Ensure that the following modules are available:
+  - `awx.main.models` (includes Credential, CredentialType, Organization, Project, JobTemplate, Team, Role, User)
+  - `awx.main.utils` (provides `decrypt_field`)
 
-3. **Python (AWX/AAP bundled):** AWX/AAP bundles the required Python
-   environment; you won't need a separate Python installation on your host.
-
----
-
-## How to Run 
-
-1. Place the script in your AWX/AAP environment. You can store it anywhere 
-    accessible within your AWX/AAP installtion. I typically do this in a 
-    controller node.
-
-2. Enter the `awx-manage shell_plus` environment:
-
-    ```shell
-
-    awx-manage shell_plus
-
-    ```
-
-    This command starts a Python shell in the AWX/AAP environment.
-
-3. Execute the script by typing:
-
-    ```shell
-
-    exec(open("/path/of/script.py").read())
-
-    ```
-   
-    * Replace `"/path/of/script.py"` with the actual full path of your script
-    (e.g, `"/tmp/aapCredsDecrypt.py"`).
-
-    * This command reads the script file and executes its contents in the AWX/AAP
-    environment.
-
-4. Follow the on-screen prompts. The script will ask you:
-
-    * Whether you want to list all used Credential Types.
-
-    * Whether you want to decrypt for one specific Credential Type or for all
-    used Credential Types.
-
-    * Whether you want to output the decrypted data on screen, save it to a
-    file, or do both.
+  **Note:** This is done via the `import` of modules within the Python script
 
 ---
 
-## Line-by-Line Explanation
+## Installation and Setup
 
-Below is the script, annotated with explanations. For brevity, only the
-conceptual overview is provided here as a guide to walk through what each
-section does.
+1. **Import the Script:**  
+   Save the script as `aapCredsDecryptExIm.py` or with whatever name you prefer onto your AWX/AAP server where the required Python environment is active. This is typically your `controller node`.
 
-```python
+2. **Apply Appropriate Permissions:**  
+   Optionally, make the script executable, if not by default:
+   ```
+   chmod +x aapCredsDecryptExIm.py
+   ```
 
-#!/usr/bin/env python
-
-import sys
-import json
-
-print("DEBUG: The script has started running.")
-
-try:
-    # AWX and AAP specific imports
-    from awx.main.models import Credential, CredentialType
-    from awx.main.utils import decrypt_field
-    print("DEBUG: Imports succeeded.")
-except ImportError:
-    print("ERROR: This script must be run within the AWX/AAP environment.")
-    print("       For example, run 'awx-manage shell_plus' then
-          'exec(open(\"/path/of/script.py\").read())'")
-    sys.exit(1)
-
-print("DEBUG: Past the try/except. About to define functions.")
-
-# Encrypted fields we want to attempt to decrypt
-SECRET_FIELDS = [
-    "password",
-    "ssh_key_data",
-    "ssh_key_unlock",
-    "become_password",
-    "vault_password",
-    "authorize_password",
-    "secret",
-    "secret_key",
-    "security_token",
-]
-
-def list_used_credential_types():
-    """
-    Return a list of CredentialTypes that are actively used
-    by existing Credential objects.
-    """
-    used_ct_ids = Credential.objects.values_list("credential_type_id", flat=True).distinct()
-    return CredentialType.objects.filter(id__in=used_ct_ids)
-
-def decrypt_credentials_by_type(cred_type):
-    """
-    Decrypt all credentials matching the provided CredentialType.
-    Return a list of dicts with credential info.
-    """
-    creds = Credential.objects.filter(credential_type=cred_type)
-    results = []
-
-    for cred in creds:
-        cred_info = {
-            "id": cred.id,
-            "name": cred.name,
-            "credential_type": cred_type.name,
-            "decrypted_fields": {},
-        }
-        # Decrypt only the fields that exist in cred.inputs
-        for field_name in SECRET_FIELDS:
-            if field_name in cred.inputs:
-                try:
-                    value = decrypt_field(cred, field_name)
-                except Exception:
-                    value = None  # or "ERROR DECRYPTING"
-                cred_info["decrypted_fields"][field_name] = value
-
-        results.append(cred_info)
-
-    return results
-
-def decrypt_all_used_types():
-    """
-    Decrypt all credentials for *all* used credential types.
-    Return a combined list of all decrypted credentials.
-    """
-    all_results = []
-    used_types = list_used_credential_types()
-    for ct in used_types:
-        all_results.extend(decrypt_credentials_by_type(ct))
-    return all_results
-
-print("DEBUG: About to enter main()")
-
-def main():
-    print("DEBUG: Entered main()")
-
-    # 1) Prompt user: list all used Credential Types?
-    show_types = input("Do you want to list all used Credential Types? (y/n): ").strip().lower()
-    if show_types == "y":
-        used_types = list_used_credential_types()
-        print("\nUsed Credential Types:")
-        for ct in used_types:
-            print(f"  - ID: {ct.id}, Name: {ct.name}")
-        print()
-
-    # 2) Prompt user: "specific" or "all" or skip
-    print("Do you want to see decrypted credentials for a specific Credential Type or for all used credentials?")
-    show_creds = input("Enter 's' for specific, 'a' for all, or press [Enter] to skip: ").strip().lower()
-    all_decrypted = []
-
-    if show_creds == "s":
-        # -- Decrypt one specific CredentialType --
-        used_types = list_used_credential_types()
-        if not used_types:
-            print("No credential types found.\n")
-            sys.exit(0)
-
-        type_dict = {str(ct.id): ct for ct in used_types}
-
-        print("Available Credential Types:")
-        for ct in used_types:
-            print(f"  {ct.id}) {ct.name}")
-        print()
-
-        selected_id = input("Enter the ID of the Credential Type you want to see: ").strip()
-        if selected_id in type_dict:
-            cred_type = type_dict[selected_id]
-            print(f"\nDecrypting credentials of type: {cred_type.name}\n")
-            all_decrypted = decrypt_credentials_by_type(cred_type)
-        else:
-            print("Invalid Credential Type ID selected. Exiting.\n")
-            sys.exit(0)
-
-    elif show_creds == "a":
-        # -- Decrypt *all* used CredentialTypes --
-        print("\nDecrypting credentials for ALL used credential types...\n")
-        all_decrypted = decrypt_all_used_types()
-
-    else:
-        # If user pressed Enter or typed something else, skip.
-        print("\nSkipping credential decryption.\n")
-
-    # 3) Output results only if we have decrypted credentials
-    if len(all_decrypted) > 0:
-        choice = input(
-            "How do you want to output the decrypted credentials?\n"
-            "  1) Standard Output\n"
-            "  2) Save to File\n"
-            "  3) Both\n"
-            "Choose [1, 2, or 3]: "
-        ).strip()
-
-        if choice not in ["1", "2", "3"]:
-            print("Invalid choice. Exiting.\n")
-            sys.exit(0)
-
-        # Convert to JSON for easy reading
-        output_json = json.dumps(all_decrypted, indent=2)
-
-        if choice in ["1", "3"]:
-            # Print to stdout
-            print("\n===== DECRYPTED CREDENTIALS =====")
-            print(output_json)
-            print("=================================\n")
-
-        if choice in ["2", "3"]:
-            # Also (or only) save to file
-            filename = input("Enter filename to save credentials (e.g., /tmp/creds.json): ").strip()
-            try:
-                with open(filename, "w") as f:
-                    f.write(output_json)
-                print(f"Credentials saved to {filename}\n")
-            except Exception as e:
-                print(f"Error writing file: {e}")
-    else:
-        print("\nNo credentials to display or export.\n")
-
-# If you are calling this script with `exec(open("script.py").read())`,
-# remove the conditional and call main() directly.
-
-#if __name__ == "__main__":
-#    main()
-
-main()
-
-
-```
-
-## What Each Part Does 
-
-1. **Imports:**
-    
-    * `sys` for system functions (exiting).
-
-    * `json` for formatting the output.
-
-    * `Credential`, `CredentialType`, `decrypt_field` (from AWX) for credential
-      handling.
-
-2. **SECRET_FIELDS:** A list of fields that the script will attempt to decrypt.
-
-3. **list_used_credential_types():** A function that finds and returns all `CredentialType`
-   objects that have at least one associated `Credential` in AWX/AAP.
-
-4. **decrypt_credentials_by_type(cred_type):** A function that decrypts all credentials of a
-   given type. Returns a list of decrypted dictionaries.
-
-5. **decrypt_all_used_types():** A function that calls `list_used_credential_types()` function and then
-   decrypts credentials for all of those types.
-
-6. **User Interactions (in main() ):**
-
-    * Prompts you to list used credential types.
-
-    * Prompts you to decrypt either a specific type or all.
-
-    * Allows you to choose how to display/save the decrypted results.
-
-7. **Execution:**
-
-    * The script calls **main()** directly at the end, so once you run
-    `exec(open("/path/of/script.py").read())`, it immediately starts and prints
-    the initial debug and user prompts.
+3. **Environment Verification:**  
+   Confirm you have access to AWX models by running an interactive shell with:
+   ```
+   awx-manage shell_plus
+   ```
 
 ---
 
-## Usage example
+## Usage Instructions
 
-1. Start `awx-manage shell_plus:`
+1. **Start the Script:**  
+   Run the script in the AWX/AAP environment:
+   ```
+   ./aapCredsDecryptExIm.py
+   ```
+   Or from an AWX shell (recommended due to interactivity):
+   ```
+   exec(open("/path/to/aapCredsDecryptExIm.py").read())
+   ```
 
-    ```shell
+2. **Interactive Main Menu:**  
+   Upon execution, the script displays a menu with options:
+   - **1:** List all used Credential Types.
+   - **2:** Decrypt ALL credentials.
+   - **3:** Decrypt specific credentials by entering a comma-separated list of Credential IDs.
+   - **4:** Import credentials from a JSON file.
+   - **5:** Exit.
 
-    awx-manage shell_plus
+3. **Output Options (for Decryption):**  
+   After decryption, you will be prompted to choose between:
+   - Printing the decrypted data to standard output.
+   - Saving the decrypted data to a file.
+   - Both, printing and saving.
 
-    ```
-
-2. Execute the script:
-
-    ```python
-    
-    exec(open("/path/of/script.py").read())
-    
-    ```
-    (Replace `"/path/of/script.py"` with the actual file path.)
-
-3. Follow the prompts to list or decrypt credentials.
-
-4. Choose your output (screen, file, or both).
-
----
-
-## Security Notice
-
-Decrypting credentials means you will see sensitive data. Use responsibly:
-
-    1. Restrict script access to trusted admins.
-
-    2. Secure or delete any exported files after use.
-
-    3. Run in a controlled environment.
+4. **Import Process:**  
+   When importing, the script checks for duplicates (credentials with the same name, type, and organization) and logs those that are skipped.
 
 ---
 
-## Conclusion
+## Function Details
 
-This script is helpful for listing and decrypting credentials in AWX/AAP for the
-benefit of a migration/consolidation or even to import specific credential types
-from a given organization or project. By starting with `awx-manage shell_plus`,
-you gain access to AWX's internal tools. Then, with a single
-`exec(open("...").read())` command, you can run the script and follow the
-on-screen prompts to decrypt and export credentials safely and easily.
+### list_used_credential_types
+- **Purpose:**  
+  Retrieves a list of `CredentialType` objects that are actively used by at least one `Credential`.
+- **Implementation:**  
+  It collects distinct credential type IDs from the `Credential` objects and filters the `CredentialType` queryset accordingly.
+
+### get_teams_from_role
+- **Purpose:**  
+  Given a `Role` object, returns the associated list of `Team` objects.
+- **Implementation:**  
+  Handles differences across AWX/AAP versions by checking for attributes like `team_set` or `teams`, or by iterating over the role’s related objects.
+    - If the list of `teams` is empty, it prints a warning message **"WARNING: Could not find related teams for role: ..."**
+
+### decrypt_single_credential
+- **Purpose:**  
+  Decrypts a single credential and builds a detailed dictionary with:
+  - Credential metadata (ID, name, type, creation/modification dates)
+  - Organization details
+  - Access list (users and teams)
+  - Related job templates
+  - Decrypted input fields
+- **Implementation:**  
+  Iterates through each field, decrypting secret fields using `decrypt_field` while preserving the original value for non-secret fields.
+
+### decrypt_credentials_by_ids
+- **Purpose:**  
+  Fetches and decrypts credentials based on a list of provided Credential IDs.
+- **Implementation:**  
+  Utilizes Django’s ORM to filter credentials by IDs and then applies `decrypt_single_credential` for each.
+
+### decrypt_all_credentials
+- **Purpose:**  
+  Decrypts every credential stored in the AWX system.
+- **Implementation:**  
+  Fetches all credentials using the ORM and processes each with `decrypt_single_credential`.
+
+### output_results
+- **Purpose:**  
+  Provides options for outputting decrypted credentials:
+  - Standard output (console)
+  - Saving to a JSON file
+  - Both
+- **Implementation:**  
+  Converts the output to formatted JSON and prompts the user for their preferred method of output.
+
+### import_credential
+- **Purpose:**  
+  Imports a single credential from a dictionary derived from a JSON export.
+- **Implementation:**  
+  - Validates existence of the corresponding `Name`, `CredentialType`, and the `Organization`.
+  - Checks for an existing credential to avoid duplicates.
+  - Converts the “fields” list into an “inputs” dictionary.
+  - Creates the new `Credential` object.
+  - Restores role memberships and associations with job templates.
+
+### import_credentials_from_file
+- **Purpose:**  
+  Imports multiple credentials from a JSON file.
+- **Implementation:**  
+  - Reads JSON data from the provided filename.
+  - Iterates over each credential’s data, invoking `import_credential`.
+  - Summarizes the number of credentials imported and lists duplicates that were skipped.
+
+### main
+- **Purpose:**  
+  Acts as the primary control loop offering an interactive menu.
+- **Implementation:**  
+  - Displays a menu with options to list credential types, decrypt credentials (all or specific), import credentials, or exit.
+  - Processes user input and calls the corresponding functions.
+  - Loops continuously until the user chooses to exit the program.
+
+---
+
+## Troubleshooting
+
+- **Import Errors:**  
+  If you see errors regarding the AWX/AAP models (such as missing imports), ensure you are running the script within the AWX/AAP environment.
+  
+- **Decryption Failures:**  
+  If decryption of a specific field fails, the error is captured and the field value will be set to `None`. Check the output in the console where the interactivity of the program is occurring.
+
+- **File I/O Issues:**  
+  Ensure the file paths provided for saving or importing JSON data are accessible and you have the necessary permissions.
+
+---
+
+## Contributing
+
+Contributions and improvements to the script are welcome. When submitting changes:
+- Ensure compatibility with the AWX/AAP environment.
+- Update this README accordingly.
+- Provide clear commit messages and document any new features, please. This is VERY IMPORTANT!!!
+
+---
+
+## License
+
+This script is provided "as-is" without any warranty. Users are free to use, modify, and distribute the script, subject to any AWX/AAP licensing restrictions.
+
