@@ -58,7 +58,7 @@ This script is a utility to manage AWX/AAP credentials by decrypting sensitive f
   
   _Tip:_ If running from within `awx-manage`, as an elevated user, such as root, run `awx-manage shell_plus` and execute the script with:
   ```
-  exec(open("/path/to/aapCredsDecryptExIm.py").read())
+  exec(open("/path/to/aapCredsManagement.py").read())
   ```
 
 - **Python:**  
@@ -76,12 +76,12 @@ This script is a utility to manage AWX/AAP credentials by decrypting sensitive f
 ## Installation and Setup
 
 1. **Import the Script:**  
-   Save the script as `aapCredsDecryptExIm.py` or with whatever name you prefer onto your AWX/AAP server where the required Python environment is active. This is typically your `controller node`.
+   Save the script as `aapCredsManagement.py` or with whatever name you prefer onto your AWX/AAP server where the required Python environment is active. This is typically your `controller node`.
 
 2. **Apply Appropriate Permissions:**  
    Optionally, make the script executable, if not by default:
    ```
-   chmod +x aapCredsDecryptExIm.py
+   chmod +x aapCredsManagement.py
    ```
 
 3. **Environment Verification:**  
@@ -97,11 +97,11 @@ This script is a utility to manage AWX/AAP credentials by decrypting sensitive f
 1. **Start the Script:**  
    Run the script in the AWX/AAP environment:
    ```
-   ./aapCredsDecryptExIm.py
+   ./aapCredsManagement.py
    ```
    Or from an AWX shell (recommended due to interactivity):
    ```
-   exec(open("/path/to/aapCredsDecryptExIm.py").read())
+   exec(open("/path/to/aapCredsManagement.py").read())
    ```
 
 2. **Interactive Main Menu:**  
