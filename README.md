@@ -224,3 +224,32 @@ Contributions and improvements to the script are welcome. When submitting change
 
 This script is provided "as-is" without any warranty. Users are free to use, modify, and distribute the script, subject to any AWX/AAP licensing restrictions.
 
+---
+
+## Playbook Notes
+
+This task below should be added to the main playbook, which is what will call the appropriate playbooks to import credentials
+
+```
+- name: Import ALL credentials from JSON (No Script)
+  ansible.builtin.import_playbook: import_all_credentials.yml  # Correct playbook
+  vars:
+    credential_file: "/path/to/your/creds.json"  # Specify the file!
+```
+
+However, to test outside of the main playbook, we can add the following as a temporary "main" playbook:
+
+```
+---
+
+- name: Main Playbook
+  hosts: localhost
+  gather_facts: false
+  become: false
+
+  tasks:
+    - name: Import ALL credentials from JSON (No Script)
+      ansible.builtin.import_playbook: import_all_credentials.yml  # Correct playbook
+      vars:
+        credential_file: "/path/to/your/creds.json"  # Specify the file!
+```
