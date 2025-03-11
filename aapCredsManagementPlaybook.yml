@@ -1,0 +1,104 @@
+---
+- name: Export credentials from source environment
+  hosts: "{{ source_host }}"
+  gather_facts: no
+  vars:
+    # Path on the source host where the encrypted (base64) credentials file resides.
+    source_creds_file: "/tmp/creds.enc"
+    # Local file where the decrypted JSON credentials will be saved.
+    export_file: "./exported_creds.json"
+  tasks:
+    - name: Retrieve encrypted credentials from source file
+      slurp:
+        src: "{{ source_creds_file }}"
+      register: creds_data
+
+    - name: Decrypt credentials (base64 decode)
+      set_fact:
+        decrypted_creds: "{{ creds_data.content | b64decode }}"
+
+    - name: Validate and pretty-print JSON credentials
+      set_fact:
+        creds_json: "{{ decrypted_creds | from_json | to_nice_json }}"
+
+    - name: Save decrypted credentials to local file
+      delegate_to: localhost
+      copy:
+        dest: "{{ export_file }}"
+        content: "{{ creds_json }}"
+      run_once: true
+
+    - name: Encrypt the exported credentials file with Ansible Vault
+      delegate_to: localhost
+      community.general.ansible_vault:
+        src: "{{ export_file }}"
+        dest: "{{ export_file }}"
+        vault_password_file: "{{ vault_password_file }}"
+        state: encrypt
+      run_once: true
+
+    - name: Record export report (credential keys exported)
+      delegate_to: localhost
+      set_fact:
+        export_report: "{{ {'exported': (creds_json | from_json | dict2items | map(attribute='key') | list), 'skipped': []} }}"
+      run_once: true
+
+- name: Import credentials to destination environment
+  hosts: "{{ destination_host }}"
+  gather_facts: no
+  tags: import
+  vars:
+    # These files are local to the control node.
+    export_file: "./exported_creds.json"
+    decrypted_file: "./decrypted_creds.json"
+  tasks:
+    - name: Decrypt the exported credentials file for import (on localhost)
+      delegate_to: localhost
+      community.general.ansible_vault:
+        src: "{{ export_file }}"
+        dest: "{{ decrypted_file }}"
+        vault_password_file: "{{ vault_password_file }}"
+        state: decrypt
+      run_once: true
+
+    - name: Read decrypted credentials file for import
+      delegate_to: localhost
+      slurp:
+        src: "{{ decrypted_file }}"
+      register: imported_creds_raw
+      run_once: true
+
+    - name: Set fact for imported credentials
+      set_fact:
+        imported_creds: "{{ imported_creds_raw.content | b64decode | from_json }}"
+      run_once: true
+
+    - name: Import credentials (simulate by copying JSON to destination)
+      copy:
+        dest: "/etc/credentials_imported.json"
+        content: "{{ imported_creds | to_nice_json }}"
+      run_once: true
+
+    - name: Record import report (credential keys imported)
+      delegate_to: localhost
+      set_fact:
+        import_report: "{{ {'imported': (imported_creds | dict2items | map(attribute='key') | list), 'skipped': []} }}"
+      run_once: true
+
+- name: Print final credentials report
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Display credentials export/import report
+      debug:
+        msg: |
+          === Final Report ===
+          Exported Credentials: {{ export_report.exported }}
+          Imported Credentials: {{ (import_report.imported if import_report is defined else 'None') }}
+          {% if export_report.skipped | length > 0 %}
+          Skipped on export: {{ export_report.skipped }}
+          {% endif %}
+          {% if import_report is defined and import_report.skipped | length > 0 %}
+          Skipped on import: {{ import_report.skipped }}
+          {% endif %}
+      run_once: true
