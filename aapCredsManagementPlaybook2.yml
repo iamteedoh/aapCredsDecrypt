@@ -94,7 +94,7 @@
       connection: local
       become: false
       ansible.builtin.set_fact:
-        export_report: "{{ {'exported': (awx_export_json | from_json)['credentials'] | map(attribute='name') | list, 'skipped': []} }}"
+        export_report: "{{ awx_output.stdout | from_json | json_query('credentials[*].name') }}"  # Changed this
       run_once: true
 
     - name: Trigger import handler after export tasks complete
@@ -131,7 +131,7 @@
           delegate_to: "{{ destination_host }}"
           become: yes
           shell: |
-            awx-manage shell_plus --quiet --command "import json; from awx.main.models import Credential, CredentialType, Organization, Project, JobTemplate, Team, Role, User; 
+            awx-manage shell_plus --quiet --command "import json; from awx.main.models import Credential, CredentialType, Organization, Project, JobTemplate, Team, Role, User;
             with open('/tmp/new_export.json') as f:
               data = json.load(f);
             imported = []; skipped = [];
@@ -179,12 +179,7 @@
       debug:
         msg: |
           === Final Report ===
-          Exported Credentials: {{ export_report.exported | default([]) }}
-          Imported Credentials: {{ import_report.imported | default("None") }}
-          {% if (export_report.skipped | default([])) | length > 0 %}
-          Skipped on export: {{ export_report.skipped | default([]) }}
-          {% endif %}
-          {% if (import_report.skipped | default([])) | length > 0 %}
+          Exported Credentials: {{ export_report | default([]) }}
+          Imported Credentials: {{ import_report.imported | default([]) }}
           Skipped on import: {{ import_report.skipped | default([]) }}
-          {% endif %}
       run_once: true
