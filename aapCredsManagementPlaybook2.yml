@@ -110,6 +110,11 @@
         import_report: "{{ import_report | default({}) }}"
       run_once: true
 
+    - name: Check destination_host  # NEW DEBUG TASK
+      debug:
+        var: destination_host
+      when: destination_host is not defined
+
   handlers:
     - name: import_credentials
       tags: import
@@ -120,12 +125,28 @@
           become: false
           shell: ansible-vault decrypt {{ export_file }} --vault-password-file {{ vault_password_file }} --output=/tmp/decrypted_creds.json
           run_once: true
+          failed_when: false  # NEW: Don't fail immediately
+          register: decrypt_result # Capture Result
+
+        - name: Check Decrypt Result  # NEW DEBUG TASK
+          debug:
+            var: decrypt_result
+          run_once: true
+
 
         - name: Copy decrypted file to destination host
           copy:
             src: "/tmp/decrypted_creds.json"
             dest: "/tmp/new_export.json"
           delegate_to: "{{ destination_host }}"
+          failed_when: false  # NEW: Don't fail immediately
+          register: copy_result    # Capture result
+
+        - name: Debug Copy Result # NEW DEBUG TASK
+          debug:
+            var: copy_result
+          delegate_to: "{{ destination_host }}"
+
 
         - name: Import AWX objects using awx-manage shell_plus on destination host
           delegate_to: "{{ destination_host }}"
@@ -144,14 +165,12 @@
                 skipped.append(cred['name']);
             print(json.dumps({'imported': imported, 'skipped': skipped}))"
           register: import_command_result
+          failed_when: false  # NEW: Don't fail immediately
 
-        - name: Set import report fact from command output
-          delegate_to: localhost
-          connection: local
-          become: false
-          ansible.builtin.set_fact:
-            import_report: "{{ import_command_result.stdout | from_json }}"
-          run_once: true
+        - name: Debug Import Result  # NEW DEBUG TASK
+          debug:
+            var: import_command_result
+          delegate_to: "{{ destination_host }}"
 
         - name: Clean up temporary export file on destination host
           file:
@@ -159,6 +178,14 @@
             state: absent
           delegate_to: "{{ destination_host }}"
           become: yes
+          failed_when: false # Don't fail the playbook if cleanup fails.
+          register: cleanup_result
+
+        - name: Debug cleanup result  # NEW DEBUG TASK
+          debug:
+            var: cleanup_result
+          delegate_to: "{{ destination_host }}"
+
 
         - name: Remove decrypted file on control node
           delegate_to: localhost
@@ -167,6 +194,13 @@
           ansible.builtin.file:
             path: "/tmp/decrypted_creds.json"
             state: absent
+          run_once: true
+          failed_when: false
+          register: cleanup_result_local
+
+        - name: Debug local cleanup result
+          debug:
+            var: cleanup_result_local
           run_once: true
 
 - name: Print final AWX export/import report
