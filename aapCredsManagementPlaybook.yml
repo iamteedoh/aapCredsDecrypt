@@ -46,16 +46,13 @@
         export_report: "{{ {'exported': (creds_json | from_json | map(attribute='name') | list), 'skipped': []} }}"
       run_once: true
 
-    - name: Notify import handler to run after export tasks complete
+    - name: Trigger import handler after export tasks complete
       meta: flush_handlers
 
   handlers:
     - name: import_credentials
       tags: import
-      hosts: "{{ destination_host }}"
-      become: yes
-      run_once: true
-      tasks:
+      block:
         - name: Decrypt the exported credentials file for import (on localhost)
           delegate_to: localhost
           community.general.ansible_vault:
@@ -69,8 +66,11 @@
           copy:
             src: "./decrypted_creds.json"
             dest: "/tmp/new_creds.json"
+          delegate_to: "{{ destination_host }}"
 
         - name: Import credentials using awx-manage shell_plus on destination host
+          delegate_to: "{{ destination_host }}"
+          become: yes
           shell: >
             awx-manage shell_plus --quiet --command "import json;
             from awx.main.models import Credential, CredentialType;
@@ -89,15 +89,16 @@
           register: import_command_result
 
         - name: Set import report fact from command output
+          delegate_to: localhost
           set_fact:
             import_report: "{{ import_command_result.stdout | from_json }}"
-          delegate_to: localhost
           run_once: true
 
         - name: Clean up temporary credentials file on destination host
           file:
             path: "/tmp/new_creds.json"
             state: absent
+          delegate_to: "{{ destination_host }}"
           become: yes
 
         - name: Remove decrypted credentials file on control node
