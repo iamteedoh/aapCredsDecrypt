@@ -8,7 +8,7 @@
   vars:
     # Use an absolute path for the exported file
     export_file: "/tmp/exported_creds.json"
-    # Command to retrieve credentials from AWX via shell_plus.
+    # Command to retrieve credentials from AWX via shell_plus
     awx_export_command: >
       awx-manage shell_plus --quiet --command "from awx.main.models import Credential; import json; print(json.dumps([{'id': c.id, 'name': c.name, 'credential_type': c.credential_type.name, 'inputs': c.inputs} for c in Credential.objects.all()]))"
   tasks:
@@ -54,7 +54,7 @@
       delegate_to: localhost
       connection: local
       become: false
-      shell: ansible-vault encrypt {{ export_file }} --vault-password-file {{ vault_password_file }} --force
+      shell: ansible-vault encrypt {{ export_file }} --vault-password-file {{ vault_password_file }}
       run_once: true
 
     - name: Record export report (credential names exported)
