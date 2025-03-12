@@ -8,7 +8,7 @@
   vars:
     # Use an absolute path for the exported file
     export_file: "/tmp/exported_creds.json"
-    # Command to retrieve credentials from AWX via shell_plus
+    # Command to retrieve credentials from AWX via shell_plus.
     awx_export_command: >
       awx-manage shell_plus --quiet --command "from awx.main.models import Credential; import json; print(json.dumps([{'id': c.id, 'name': c.name, 'credential_type': c.credential_type.name, 'inputs': c.inputs} for c in Credential.objects.all()]))"
   tasks:
@@ -37,8 +37,10 @@
       run_once: true
 
     - name: Save credentials to local file
-      local_action:
-        module: ansible.builtin.copy
+      delegate_to: localhost
+      connection: local
+      become: false
+      ansible.builtin.copy:
         dest: "{{ export_file }}"
         content: "{{ creds_json }}"
       run_once: true
@@ -49,14 +51,17 @@
       run_once: true
 
     - name: Encrypt the exported credentials file with ansible-vault CLI
-      local_action:
-        module: shell
-        cmd: ansible-vault encrypt {{ export_file }} --vault-password-file {{ vault_password_file }} --force
+      delegate_to: localhost
+      connection: local
+      become: false
+      shell: ansible-vault encrypt {{ export_file }} --vault-password-file {{ vault_password_file }} --force
       run_once: true
 
     - name: Record export report (credential names exported)
-      local_action:
-        module: ansible.builtin.set_fact
+      delegate_to: localhost
+      connection: local
+      become: false
+      ansible.builtin.set_fact:
         export_report: "{{ {'exported': (creds_json | from_json | map(attribute='name') | list), 'skipped': []} }}"
       run_once: true
 
@@ -68,9 +73,10 @@
       tags: import
       block:
         - name: Decrypt the exported credentials file for import (on localhost)
-          local_action:
-            module: shell
-            cmd: ansible-vault decrypt {{ export_file }} --vault-password-file {{ vault_password_file }} --output=/tmp/decrypted_creds.json
+          delegate_to: localhost
+          connection: local
+          become: false
+          shell: ansible-vault decrypt {{ export_file }} --vault-password-file {{ vault_password_file }} --output=/tmp/decrypted_creds.json
           run_once: true
 
         - name: Copy decrypted credentials file to destination host
@@ -100,8 +106,10 @@
           register: import_command_result
 
         - name: Set import report fact from command output
-          local_action:
-            module: ansible.builtin.set_fact
+          delegate_to: localhost
+          connection: local
+          become: false
+          ansible.builtin.set_fact:
             import_report: "{{ import_command_result.stdout | from_json }}"
           run_once: true
 
@@ -113,8 +121,10 @@
           become: yes
 
         - name: Remove decrypted credentials file on control node
-          local_action:
-            module: ansible.builtin.file
+          delegate_to: localhost
+          connection: local
+          become: false
+          ansible.builtin.file:
             path: "/tmp/decrypted_creds.json"
             state: absent
           run_once: true
