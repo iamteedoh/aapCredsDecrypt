@@ -13,7 +13,7 @@
       from awx.main.models import Credential, CredentialType, Organization, Project, JobTemplate, Team, Role, User
       from awx.main.utils.encryption import decrypt_value
       SECRET_FIELDS = ["password", "ssh_key_data", "ssh_key_unlock", "become_password", "vault_password", "authorize_password", "secret", "secret_key", "security_token"]
-      decrypt_inputs = lambda inputs: {} if inputs is None else {k:(decrypt_value(v, None) if (k in SECRET_FIELDS and isinstance(v, str) and v.startswith("$encrypted$") and v is not None) else v) for k,v in inputs.items()}
+      decrypt_inputs = lambda inputs: {} if inputs is None else {k:(decrypt_value(v, None) if (v is not None and k in SECRET_FIELDS and isinstance(v, str) and v.startswith("$encrypted$")) else v) for k,v in inputs.items()}
       output = {
           "credentials": [{"id": c.id, "name": c.name, "credential_type": c.credential_type.name, "inputs": decrypt_inputs(c.inputs)} for c in Credential.objects.all()],
           "credential_types": [{"id": ct.id, "name": ct.name} for ct in CredentialType.objects.all()],
@@ -113,7 +113,7 @@
         - name: Import AWX objects using awx-manage shell_plus on destination host
           delegate_to: "{{ destination_host }}"
           become: yes
-          shell: >
+          shell: |
             awx-manage shell_plus --quiet --command "import json; from awx.main.models import Credential, CredentialType, Organization, Project, JobTemplate, Team, Role, User; 
             with open('/tmp/new_export.json') as f:
               data = json.load(f);
