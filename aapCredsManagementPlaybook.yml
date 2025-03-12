@@ -1,25 +1,28 @@
 ---
-- name: Export credentials from source environment
-  hosts: "{{ source_host }}"
+- name: Export credentials from source environment using awx-manage shell_plus
+  hosts: "{{ source_host | default('sourcesys') }}"
+  become: yes
   gather_facts: no
   vars:
-    # Path on the source host where the encrypted (base64) credentials file resides.
-    source_creds_file: "/tmp/creds.enc"
-    # Local file where the decrypted JSON credentials will be saved.
+    # Local file paths on the control node
     export_file: "./exported_creds.json"
+    # Command to retrieve credentials from AWX via shell_plus.
+    awx_export_command: >
+      awx-manage shell_plus --quiet --command "from awx.main.models import Credential; import json; print(json.dumps([{'id': c.id, 'name': c.name, 'credential_type': c.credential_type.name, 'inputs': c.inputs} for c in Credential.objects.all()]))"
   tasks:
-    - name: Retrieve encrypted credentials from source file
-      slurp:
-        src: "{{ source_creds_file }}"
-      register: creds_data
+    - name: Retrieve credentials from AWX using awx-manage shell_plus
+      shell: "{{ awx_export_command }}"
+      register: awx_creds
+      changed_when: false
 
-    - name: Decrypt credentials (base64 decode)
-      set_fact:
-        decrypted_creds: "{{ creds_data.content | b64decode }}"
+    - name: Fail if retrieval failed
+      fail:
+        msg: "Failed to retrieve credentials: {{ awx_creds.stderr }}"
+      when: awx_creds.rc != 0
 
     - name: Validate and pretty-print JSON credentials
       set_fact:
-        creds_json: "{{ decrypted_creds | from_json | to_nice_json }}"
+        creds_json: "{{ awx_creds.stdout | from_json | to_nice_json }}"
 
     - name: Save decrypted credentials to local file
       delegate_to: localhost
@@ -37,53 +40,72 @@
         state: encrypt
       run_once: true
 
-    - name: Record export report (credential keys exported)
+    - name: Record export report (credential names exported)
       delegate_to: localhost
       set_fact:
-        export_report: "{{ {'exported': (creds_json | from_json | dict2items | map(attribute='key') | list), 'skipped': []} }}"
+        export_report: "{{ {'exported': (creds_json | from_json | map(attribute='name') | list), 'skipped': []} }}"
       run_once: true
 
-- name: Import credentials to destination environment
-  hosts: "{{ destination_host }}"
-  gather_facts: no
-  tags: import
-  vars:
-    # These files are local to the control node.
-    export_file: "./exported_creds.json"
-    decrypted_file: "./decrypted_creds.json"
-  tasks:
-    - name: Decrypt the exported credentials file for import (on localhost)
-      delegate_to: localhost
-      community.general.ansible_vault:
-        src: "{{ export_file }}"
-        dest: "{{ decrypted_file }}"
-        vault_password_file: "{{ vault_password_file }}"
-        state: decrypt
-      run_once: true
+    - name: Notify import handler to run after export tasks complete
+      meta: flush_handlers
 
-    - name: Read decrypted credentials file for import
-      delegate_to: localhost
-      slurp:
-        src: "{{ decrypted_file }}"
-      register: imported_creds_raw
+  handlers:
+    - name: import_credentials
+      tags: import
+      hosts: "{{ destination_host }}"
+      become: yes
       run_once: true
+      tasks:
+        - name: Decrypt the exported credentials file for import (on localhost)
+          delegate_to: localhost
+          community.general.ansible_vault:
+            src: "{{ export_file }}"
+            dest: "./decrypted_creds.json"
+            vault_password_file: "{{ vault_password_file }}"
+            state: decrypt
+          run_once: true
 
-    - name: Set fact for imported credentials
-      set_fact:
-        imported_creds: "{{ imported_creds_raw.content | b64decode | from_json }}"
-      run_once: true
+        - name: Copy decrypted credentials file to destination host
+          copy:
+            src: "./decrypted_creds.json"
+            dest: "/tmp/new_creds.json"
 
-    - name: Import credentials (simulate by copying JSON to destination)
-      copy:
-        dest: "/etc/credentials_imported.json"
-        content: "{{ imported_creds | to_nice_json }}"
-      run_once: true
+        - name: Import credentials using awx-manage shell_plus on destination host
+          shell: >
+            awx-manage shell_plus --quiet --command "import json;
+            from awx.main.models import Credential, CredentialType;
+            with open('/tmp/new_creds.json') as f:
+                new_creds = json.load(f);
+            imported = [];
+            skipped = [];
+            for cred in new_creds:
+                if not Credential.objects.filter(name=cred['name']).exists():
+                    ct = CredentialType.objects.get(name=cred['credential_type']);
+                    Credential.objects.create(name=cred['name'], credential_type=ct, inputs=cred['inputs']);
+                    imported.append(cred['name']);
+                else:
+                    skipped.append(cred['name']);
+            print(json.dumps({'imported': imported, 'skipped': skipped}))"
+          register: import_command_result
 
-    - name: Record import report (credential keys imported)
-      delegate_to: localhost
-      set_fact:
-        import_report: "{{ {'imported': (imported_creds | dict2items | map(attribute='key') | list), 'skipped': []} }}"
-      run_once: true
+        - name: Set import report fact from command output
+          set_fact:
+            import_report: "{{ import_command_result.stdout | from_json }}"
+          delegate_to: localhost
+          run_once: true
+
+        - name: Clean up temporary credentials file on destination host
+          file:
+            path: "/tmp/new_creds.json"
+            state: absent
+          become: yes
+
+        - name: Remove decrypted credentials file on control node
+          delegate_to: localhost
+          file:
+            path: "./decrypted_creds.json"
+            state: absent
+          run_once: true
 
 - name: Print final credentials report
   hosts: localhost
@@ -102,5 +124,3 @@
           Skipped on import: {{ import_report.skipped }}
           {% endif %}
       run_once: true
-
-## This comment should get pulled in. This is only a test for commit changes
