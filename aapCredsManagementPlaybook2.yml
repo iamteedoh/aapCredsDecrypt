@@ -16,8 +16,8 @@
       CRED_TYPES_WITH_SECRETS = ["aws", "azure", "gce", "vmware", "satellite6", "cloudforms", "insights"]
       decrypt_inputs = lambda inputs, cred_type: {} if inputs is None else {k:(decrypt_value(v, None) if (cred_type in CRED_TYPES_WITH_SECRETS and v is not None and k in SECRET_FIELDS and isinstance(v, str) and v.startswith("$encrypted$")) else v) for k,v in inputs.items()}
       output = {
-          "credentials": [{"id": c.id, "name": c.name, "credential_type": c.credential_type.name, "inputs": decrypt_inputs(c.inputs, c.credential_type.kind)} for c in Credential.objects.all()],
-          "credential_types": [{"id": ct.id, "name": ct.name, "kind": ct.kind} for ct in CredentialType.objects.all()],
+          "credentials": [{"id": c.id, "name": c.name, "credential_type": str(c.credential_type.name), "inputs": decrypt_inputs(c.inputs, c.credential_type.kind)} for c in Credential.objects.all()],
+          "credential_types": [{"id": ct.id, "name": str(ct.name), "kind": str(ct.kind)} for ct in CredentialType.objects.all()],
           "organizations": [{"id": org.id, "name": org.name} for org in Organization.objects.all()],
           "projects": [{"id": p.id, "name": p.name} for p in Project.objects.all()],
           "job_templates": [{"id": jt.id, "name": jt.name} for jt in JobTemplate.objects.all()],
