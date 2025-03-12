@@ -68,6 +68,16 @@
     - name: Trigger import handler after export tasks complete
       meta: flush_handlers
 
+    - name: Persist report variables for later plays
+      delegate_to: localhost
+      connection: local
+      become: false
+      ansible.builtin.add_host:
+        name: report
+        export_report: "{{ export_report }}"
+        import_report: "{{ import_report | default({}) }}"
+      run_once: true
+
   handlers:
     - name: import_credentials
       tags: import
@@ -130,7 +140,7 @@
           run_once: true
 
 - name: Print final credentials report
-  hosts: localhost
+  hosts: report
   gather_facts: no
   collections:
     - community.general
@@ -140,7 +150,7 @@
         msg: |
           === Final Report ===
           Exported Credentials: {{ export_report.exported }}
-          Imported Credentials: {{ (import_report.imported if import_report is defined else 'None') }}
+          Imported Credentials: {{ (import_report.imported if import_report is defined and import_report.imported is defined else 'None') }}
           {% if export_report.skipped | length > 0 %}
           Skipped on export: {{ export_report.skipped }}
           {% endif %}
