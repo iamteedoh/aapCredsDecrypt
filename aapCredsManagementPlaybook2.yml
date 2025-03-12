@@ -7,7 +7,6 @@
     - community.general
   vars:
     export_file: "/tmp/exported_creds.json"
-    # destination_host: "your_destination_awx_server"  # REMOVE THIS - It's in the inventory now!
     awx_export_command: |
       awx-manage shell_plus --quiet --command '
       import json
@@ -20,7 +19,7 @@
 
       def stringify_lazy(obj):
           """Recursively convert lazy translation objects to strings."""
-          if isinstance(obj, Promise):  # Check for the Promise class
+          if isinstance(obj, Promise):
               return str(obj)
           elif isinstance(obj, dict):
               return {k: stringify_lazy(v) for k, v in obj.items()}
@@ -28,7 +27,6 @@
               return [stringify_lazy(elem) for elem in obj]
           else:
               return obj
-
 
       decrypt_inputs = lambda inputs, cred_type: {} if inputs is None else {k:(decrypt_value(v, None) if (cred_type in CRED_TYPES_WITH_SECRETS and v is not None and k in SECRET_FIELDS and isinstance(v, str) and v.startswith("$encrypted$")) else v) for k,v in inputs.items()}
 
@@ -48,7 +46,7 @@
     - name: Retrieve AWX objects using awx-manage shell_plus
       shell: "{{ awx_export_command }}"
       register: awx_output
-      changed_when: false
+      # changed_when: false  <--- REMOVED
 
     - name: Fail if AWX export retrieval failed
       fail:
@@ -59,7 +57,7 @@
       set_fact:
         awx_export_json: "{{ awx_output.stdout | from_json | to_nice_json }}"
 
-    - name: Debug AWX export JSON  # You can remove this debug task now
+    - name: Debug AWX export JSON
       debug:
         msg: "{{ awx_export_json }}"
       run_once: true
@@ -121,14 +119,12 @@
           become: false
           shell: ansible-vault decrypt {{ export_file }} --vault-password-file {{ vault_password_file }} --output=/tmp/decrypted_creds.json
           run_once: true
-          # We've already verified decryption works, so we don't need to check it again *unless* the error changes
 
         - name: Copy decrypted file to destination host
           copy:
             src: "/tmp/decrypted_creds.json"
             dest: "/tmp/new_export.json"
           delegate_to: "{{ destination_host }}"
-          # We've already verified copy works when destination_host is set, so we don't need to check it again *unless* the error changes
 
         - name: Import AWX objects using awx-manage shell_plus on destination host
           delegate_to: "{{ destination_host }}"
@@ -147,21 +143,14 @@
                 skipped.append(cred['name']);
             print(json.dumps({'imported': imported, 'skipped': skipped}))"
           register: import_command_result
-          failed_when: false  # CRITICAL: Add this back
-
-        - name: Debug Import Result  # CRITICAL: Add this back
-          debug:
-            var: import_command_result
-          delegate_to: "{{ destination_host }}"
 
         - name: Set import report fact from command output
           delegate_to: localhost
           connection: local
           become: false
           ansible.builtin.set_fact:
-            import_report: "{{ import_command_result.stdout | from_json }}"  # This will likely fail, but that's OK for now
+            import_report: "{{ import_command_result.stdout | from_json }}"
           run_once: true
-          failed_when: false # ADD THIS.  We *expect* this to fail initially.
 
         - name: Clean up temporary export file on destination host
           file:
