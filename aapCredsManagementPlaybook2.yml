@@ -42,11 +42,12 @@
       }
       print(json.dumps(stringify_lazy(output)))
       '
+
   tasks:
     - name: Retrieve AWX objects using awx-manage shell_plus
       shell: "{{ awx_export_command }}"
       register: awx_output
-      # changed_when: false  <--- Removed.  Handlers need a changed task.
+      # changed_when: false  <- Removed:  Handlers NEED a changed task.
 
     - name: Fail if AWX export retrieval failed
       fail:
@@ -57,7 +58,7 @@
       set_fact:
         awx_export_json: "{{ awx_output.stdout | from_json | to_nice_json }}"
 
-    - name: Debug AWX export JSON  # Keep this for now, in case export has subtle issues
+    - name: Debug AWX export JSON  # Keep this until you're sure everything is perfect
       debug:
         msg: "{{ awx_export_json }}"
       run_once: true
@@ -93,7 +94,7 @@
       connection: local
       become: false
       ansible.builtin.set_fact:
-        export_report: "{{ awx_output.stdout | from_json | json_query('credentials[*].name') }}"
+        export_report: "{{ {'exported': (awx_output.stdout | from_json)['credentials'] | map(attribute='name') | list, 'skipped': []} }}"  # Back to dictionary structure
       run_once: true
 
     - name: Trigger import handler after export tasks complete
@@ -106,12 +107,7 @@
       ansible.builtin.add_host:
         name: report
         export_report: "{{ export_report }}"
-        import_report: "{{ import_report | default({}) }}"
-        # report_output: |  # Removed: calculate this in the final play
-        #   === Final Report ===
-        #   Exported Credentials: {% if export_report | length > 0 %}{{ export_report }}{% else %}None{% endif %}
-        #   Imported Credentials: {% if import_report.imported | length > 0 %}{{ import_report.imported }}{% else %}None{% endif %}
-        #   Skipped on import: {% if import_report.skipped | length > 0 %}{{ import_report.skipped }}{% else %}None{% endif %}
+        import_report: "{{ import_report | default({}) }}"  # Keep the default for now, in case of import errors
       run_once: true
 
   handlers:
@@ -148,21 +144,22 @@
                 skipped.append(cred['name']);
             print(json.dumps({'imported': imported, 'skipped': skipped}))"
           register: import_command_result
-          failed_when: false  # CRITICAL: Added back
+          # failed_when: false  <- Removed. We want to know *if* it fails, but the debug task is gone now.
+          #   If it *does* fail, we'll add these back TEMPORARILY to debug.
 
-        - name: Debug Import Result  # CRITICAL: Added back
+        - name: Debug Import Result  # REMOVED. Only add this back if import fails.
           debug:
             var: import_command_result
-          delegate_to: "{{ destination_host }}"  # Ensure we see output from the correct host
+          delegate_to: "{{ destination_host }}"
 
         - name: Set import report fact from command output
           delegate_to: localhost
           connection: local
           become: false
           ansible.builtin.set_fact:
-            import_report: "{{ import_command_result.stdout | from_json | default({}) }}"  # Added default({})
+            import_report: "{{ import_command_result.stdout | from_json | default({}) }}"  # Keep default({}) for robustness
           run_once: true
-          failed_when: false # Keep this
+          # failed_when: false  <- Removed.  We want to know if *this* fails.
 
         - name: Clean up temporary export file on destination host
           file:
@@ -187,12 +184,10 @@
     - community.general
   tasks:
     - name: Display AWX export/import report
-      debug: #Revert back to original
-        var: report_output
-      run_once: true
-      vars:
-        report_output: |
+      debug:
+        msg: |
           === Final Report ===
-          Exported Credentials: {% if export_report | length > 0 %}{{ export_report }}{% else %}None{% endif %}
+          Exported Credentials: {% if export_report.exported | length > 0 %}{{ export_report.exported }}{% else %}None{% endif %}
           Imported Credentials: {% if import_report.imported | length > 0 %}{{ import_report.imported }}{% else %}None{% endif %}
           Skipped on import: {% if import_report.skipped | length > 0 %}{{ import_report.skipped }}{% else %}None{% endif %}
+      run_once: true
