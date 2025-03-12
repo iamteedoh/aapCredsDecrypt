@@ -149,12 +149,12 @@
       debug:
         msg: |
           === Final Report ===
-          Exported Credentials: {{ export_report.exported }}
-          Imported Credentials: {{ (import_report.imported if import_report is defined and import_report.imported is defined else 'None') }}
-          {% if export_report.skipped | length > 0 %}
-          Skipped on export: {{ export_report.skipped }}
+          Exported Credentials: {{ export_report.exported | default([]) }}
+          Imported Credentials: {{ import_report.imported | default('None') }}
+          {% if (export_report.skipped | default([])) | length > 0 %}
+          Skipped on export: {{ export_report.skipped | default([]) }}
           {% endif %}
-          {% if import_report is defined and import_report.skipped | length > 0 %}
-          Skipped on import: {{ import_report.skipped }}
+          {% if (import_report.skipped | default([])) | length > 0 %}
+          Skipped on import: {{ import_report.skipped | default([]) }}
           {% endif %}
       run_once: true
