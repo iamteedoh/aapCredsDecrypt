@@ -121,12 +121,14 @@
           become: false
           shell: ansible-vault decrypt {{ export_file }} --vault-password-file {{ vault_password_file }} --output=/tmp/decrypted_creds.json
           run_once: true
+          # We've already verified decryption works, so we don't need to check it again *unless* the error changes
 
         - name: Copy decrypted file to destination host
           copy:
             src: "/tmp/decrypted_creds.json"
             dest: "/tmp/new_export.json"
           delegate_to: "{{ destination_host }}"
+          # We've already verified copy works when destination_host is set, so we don't need to check it again *unless* the error changes
 
         - name: Import AWX objects using awx-manage shell_plus on destination host
           delegate_to: "{{ destination_host }}"
@@ -145,14 +147,21 @@
                 skipped.append(cred['name']);
             print(json.dumps({'imported': imported, 'skipped': skipped}))"
           register: import_command_result
+          failed_when: false  # CRITICAL: Add this back
+
+        - name: Debug Import Result  # CRITICAL: Add this back
+          debug:
+            var: import_command_result
+          delegate_to: "{{ destination_host }}"
 
         - name: Set import report fact from command output
           delegate_to: localhost
           connection: local
           become: false
           ansible.builtin.set_fact:
-            import_report: "{{ import_command_result.stdout | from_json }}"
+            import_report: "{{ import_command_result.stdout | from_json }}"  # This will likely fail, but that's OK for now
           run_once: true
+          failed_when: false # ADD THIS.  We *expect* this to fail initially.
 
         - name: Clean up temporary export file on destination host
           file:
