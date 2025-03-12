@@ -7,9 +7,8 @@
     - community.general
   vars:
     export_file: "/tmp/exported_creds.json"
-    # Updated inline Python snippet.
     awx_export_command: >
-      awx-manage shell_plus --quiet --command 'import json; from awx.main.models import Credential, CredentialType, Organization, Project, JobTemplate, Team, Role, User; from awx.main.utils.encryption import decrypt_value; SECRET_FIELDS=["password","ssh_key_data","ssh_key_unlock","become_password","vault_password","authorize_password","secret","secret_key","security_token"]; decrypt_safe=lambda v: decrypt_value(v, None) if (v is not None and isinstance(v, str) and v.startswith("$encrypted$")) else ("" if v is None else v); decrypt_inputs=lambda inputs: {} if inputs is None else {k: decrypt_safe(v) for k, v in inputs.items()}; output={"credentials":[{"id": c.id, "name": c.name, "credential_type": c.credential_type.name, "inputs": decrypt_inputs(c.inputs)} for c in Credential.objects.all()], "credential_types":[{"id": ct.id, "name": ct.name} for ct in CredentialType.objects.all()], "organizations":[{"id": org.id, "name": org.name} for org in Organization.objects.all()], "projects":[{"id": p.id, "name": p.name} for p in Project.objects.all()], "job_templates":[{"id": jt.id, "name": jt.name} for jt in JobTemplate.objects.all()], "teams":[{"id": t.id, "name": t.name} for t in Team.objects.all()], "roles":[{"id": r.id, "name": r.name} for r in Role.objects.all()], "users":[{"id": u.id, "username": u.username} for u in User.objects.all()]}; print(json.dumps(output))'
+      awx-manage shell_plus --quiet --command 'import json; from awx.main.models import Credential, CredentialType, Organization, Project, JobTemplate, Team, Role, User; from awx.main.utils.encryption import decrypt_value; SECRET_FIELDS=["password","ssh_key_data","ssh_key_unlock","become_password","vault_password","authorize_password","secret","secret_key","security_token"]; decrypt_inputs=lambda inputs: {} if inputs is None else {k:(decrypt_value(v, None) if (k in SECRET_FIELDS and isinstance(v, str) and v.startswith("$encrypted$") and v is not None) else v) for k,v in inputs.items()}; output={"credentials":[{"id":c.id, "name":c.name, "credential_type":c.credential_type.name, "inputs":decrypt_inputs(c.inputs)} for c in Credential.objects.all()], "credential_types":[{"id":ct.id, "name":ct.name} for ct in CredentialType.objects.all()], "organizations":[{"id":org.id, "name":org.name} for org in Organization.objects.all()], "projects":[{"id":p.id, "name":p.name} for p in Project.objects.all()], "job_templates":[{"id":jt.id, "name":jt.name} for jt in JobTemplate.objects.all()], "teams":[{"id":t.id, "name":t.name} for t in Team.objects.all()], "roles":[{"id":r.id, "name":r.name} for r in Role.objects.all()], "users":[{"id":u.id, "username":u.username} for u in User.objects.all()]}; print(json.dumps(output))'
   tasks:
     - name: Retrieve AWX objects using awx-manage shell_plus
       shell: "{{ awx_export_command }}"
@@ -98,8 +97,11 @@
           delegate_to: "{{ destination_host }}"
           become: yes
           shell: >
-            awx-manage shell_plus --quiet --command "import json; from awx.main.models import Credential, CredentialType, Organization, Project, JobTemplate, Team, Role, User; with open('/tmp/new_export.json') as f: data = json.load(f); imported = []; skipped = []; 
-            for cred in data.get('credentials', []): 
+            awx-manage shell_plus --quiet --command "import json; from awx.main.models import Credential, CredentialType, Organization, Project, JobTemplate, Team, Role, User; 
+            with open('/tmp/new_export.json') as f:
+              data = json.load(f);
+            imported = []; skipped = [];
+            for cred in data.get('credentials', []):
               if not Credential.objects.filter(name=cred['name']).exists():
                 ct = CredentialType.objects.get(name=cred['credential_type']);
                 Credential.objects.create(name=cred['name'], credential_type=ct, inputs=cred['inputs']);
