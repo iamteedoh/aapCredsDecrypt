@@ -1,167 +1,108 @@
-# awx/main/management/commands/aapcreds.py
+#!/usr/bin/env python
+"""
+AWX/AAP Credential Export/Import Management Command
 
-import os
+Place this file under:
+    awx/main/management/commands/aapCreds.py
+
+Usage:
+  Interactive mode:
+      awx-manage aapCreds
+  Non-interactive mode:
+      awx-manage aapCreds --quiet --export --export-file=/tmp/creds.json
+      awx-manage aapCreds --quiet --import --import-file=/tmp/creds.json
+      etc.
+"""
+
 import sys
 import json
-import argparse
+import os
 import subprocess
 import tempfile
-from django.core.management.base import BaseCommand
-from datetime import datetime
 
-# AWX/AAP specific imports (they are already available in AWX's environment)
+from django.core.management.base import BaseCommand
+from django.db.models import Q
+
+# AWX/AAP specific imports
 from awx.main.models import (
     Credential, CredentialType, Organization, Project,
     JobTemplate, Team, Role, User
 )
 from awx.main.utils import decrypt_field
-from django.db.models import Q
 
-# (Include your existing functions here: list_used_credential_types, decrypt_single_credential, etc.)
+# Encrypted fields that should be decrypted.
+SECRET_FIELDS = [
+    "password",
+    "ssh_key_data",
+    "ssh_key_unlock",
+    "become_password",
+    "vault_password",
+    "authorize_password",
+    "secret",
+    "secret_key",
+    "security_token",
+]
 
-class Command(BaseCommand):
-    help = "AWX/AAP Credential Export/Import Tool"
+def list_used_credential_types():
+    """
+    Return a queryset of CredentialTypes that are actively used by at least one Credential.
+    """
+    used_ct_ids = Credential.objects.values_list("credential_type_id", flat=True).distinct()
+    return CredentialType.objects.filter(id__in=used_ct_ids)
 
-    def add_arguments(self, parser):
-        parser.add_argument("--quiet", action="store_true", help="Run in non-interactive mode")
-        parser.add_argument("--export", action="store_true", help="Export credentials")
-        parser.add_argument("--export-file", type=str, help="File path to export credentials to (must be .json)")
-        parser.add_argument("--import", dest="import_flag", action="store_true", help="Import credentials")
-        parser.add_argument("--import-file", type=str, help="File path to import credentials from (must be .json)")
-        parser.add_argument("--list-cred-types", action="store_true", help="List used credential types")
-        parser.add_argument("--encrypt", action="store_true", help="Encrypt the exported file using ansible-vault")
-        parser.add_argument("--vault-password-file", type=str, help="Full path of the vault password file for vault operations")
-
-    def handle(self, *args, **options):
-        # If running in quiet (non-interactive) mode, process the flags.
-        if options.get("quiet"):
-            self.run_non_interactive(options)
-        else:
-            # Otherwise, run the interactive main loop.
-            self.main()
-
-    def run_non_interactive(self, opts):
-        # Example implementation based on your existing run_non_interactive code:
-        if opts.get("list_cred_types"):
-            types = list_used_credential_types()
-            if not types:
-                self.stdout.write("No credential types found.\n")
-            else:
-                self.stdout.write("Used Credential Types:")
-                for ct in types:
-                    self.stdout.write(f"  {ct.id}) {ct.name}")
-        if opts.get("export"):
-            if not opts.get("export_file"):
-                self.stderr.write("Error: --export requires --export-file to be provided.\n")
-                sys.exit(1)
-            self.stdout.write("Decrypting ALL credentials for export...\n")
-            decrypted = decrypt_all_credentials()
-            for cred in decrypted:
-                unique_jts = {tuple(sorted(d.items())) for d in cred['related_job_templates']}
-                cred['related_job_templates'] = [dict(t) for t in unique_jts]
-            output_json = json.dumps(decrypted, indent=2)
-            try:
-                with open(opts.get("export_file"), "w") as f:
-                    f.write(output_json)
-                self.stdout.write(f"Credentials exported to {opts.get('export_file')}\n")
-            except Exception as e:
-                self.stderr.write(f"Error writing export file: {e}\n")
-            if opts.get("encrypt"):
-                if not opts.get("vault_password_file"):
-                    self.stderr.write("Error: --encrypt requires --vault-password-file to be provided.\n")
-                    sys.exit(1)
-                try:
-                    subprocess.check_call([
-                        "ansible-vault", "encrypt", opts.get("export_file"),
-                        "--vault-password-file", opts.get("vault_password_file")
-                    ])
-                    self.stdout.write(f"Export file {opts.get('export_file')} encrypted using ansible-vault.\n")
-                except Exception as e:
-                    self.stderr.write(f"Error encrypting file: {e}\n")
-        if opts.get("import_flag"):
-            if not opts.get("import_file"):
-                self.stderr.write("Error: --import requires --import-file to be provided.\n")
-                sys.exit(1)
-            try:
-                with open(opts.get("import_file"), "r") as f:
-                    first_line = f.readline()
-                if first_line.startswith("$ANSIBLE_VAULT;"):
-                    if not opts.get("vault_password_file"):
-                        self.stderr.write("Error: The import file appears to be encrypted but no --vault-password-file provided.\n")
-                        sys.exit(1)
-                    temp_fd, temp_path = tempfile.mkstemp(suffix=".json")
-                    os.close(temp_fd)
-                    try:
-                        subprocess.check_call([
-                            "ansible-vault", "decrypt", opts.get("import_file"),
-                            "--vault-password-file", opts.get("vault_password_file"),
-                            "--output", temp_path
-                        ])
-                        self.stdout.write(f"Decrypted import file to temporary file: {temp_path}\n")
-                        import_credentials_from_file(temp_path)
-                    finally:
-                        os.remove(temp_path)
-                else:
-                    import_credentials_from_file(opts.get("import_file"))
-            except Exception as e:
-                self.stderr.write(f"Error processing import file: {e}\n")
-
-    def main(self):
-        # Your interactive main loop code goes here.
-        while True:
-            self.stdout.write("-------------------------------------------------")
-            self.stdout.write("Main Menu:")
-            self.stdout.write("  1) List all used Credential Types")
-            self.stdout.write("  2) Decrypt ALL credentials")
-            self.stdout.write("  3) Decrypt specific credentials")
-            self.stdout.write("  4) Import credentials from file")
-            self.stdout.write("  5) Exit")
-            option = input("Enter option [1-5]: ").strip()
-            if option == "1":
-                types = list_used_credential_types()
-                if not types:
-                    self.stdout.write("No credential types found.\n")
-                else:
-                    self.stdout.write("\nUsed Credential Types:")
-                    for ct in types:
-                        self.stdout.write(f"  {ct.id}) {ct.name}")
-                    self.stdout.write("")
-                input("Press Enter to return to the main menu...")
-            elif option == "2":
-                self.stdout.write("\nDecrypting ALL credentials...\n")
-                decrypted = decrypt_all_credentials()
-                output_results(decrypted)
-                input("Press Enter to return to the main menu...")
-            elif option == "3":
-                creds = Credential.objects.all().order_by("id")
-                if not creds:
-                    self.stdout.write("No credentials found.\n")
-                    input("Press Enter to return to the main menu...")
-                    continue
-                self.stdout.write("\nAvailable Credentials:")
-                for cred in creds:
-                    self.stdout.write(f"  {cred.id}) {cred.name} (Type: {cred.credential_type.name})")
-                selection = input("Enter comma separated list of credential IDs to decrypt: ").strip()
-                try:
-                    selected_ids = [int(x.strip()) for x in selection.split(",") if x.strip().isdigit()]
-                except Exception as e:
-                    self.stderr.write(f"Error processing input: {e}\n")
-                    input("Press Enter to return to the main menu...")
-                    continue
-                if not selected_ids:
-                    self.stdout.write("No valid credential IDs entered.\n")
-                    input("Press Enter to return to the main menu...")
-                    continue
-                self.stdout.write("\nDecrypting selected credentials...\n")
-                decrypted = decrypt_credentials_by_ids(selected_ids)
-                output_results(decrypted)
-                input("Press Enter to return to the main menu...")
-            elif option == "4":
-                filename = input("Enter the filename (with path) of the JSON file to import (e.g., /tmp/creds.json): ").strip()
-                import_credentials_from_file(filename)
-                input("Press Enter to return to the main menu...")
-            elif option == "5":
-                self.stdout.write("Exiting.\n")
+def get_teams_from_role(role):
+    """
+    Return the list of teams associated with the given Role.
+    Handles differences between AWX/AAP versions.
+    """
+    teams = []
+    if hasattr(role, 'team_set'):
+        teams = list(role.team_set.all())
+    elif hasattr(role, 'teams'):
+        teams = list(role.teams.all())
+    else:
+        for related_object in role._meta.related_objects:
+            if related_object.related_model == Team:
+                filter_kwargs = {related_object.field.name: role}
+                teams = list(Team.objects.filter(**filter_kwargs))
                 break
-            else:
-                self.stdout.write("Invalid option. Please try again.\n")
+    if not teams:
+        print(f"WARNING: Could not find related teams for role: {role}. Skipping team access.")
+    return teams
+
+def decrypt_single_credential(cred):
+    """
+    Given a Credential object, return a dictionary containing its details and its input fields.
+    """
+    ct = cred.credential_type
+    # Attempt to load field definitions from the credential type's inputs.
+    field_defs = {}
+    try:
+        if isinstance(ct.inputs, dict):
+            fields_list = ct.inputs.get("fields", [])
+            field_defs = {field.get("id"): field for field in fields_list if "id" in field}
+    except Exception as e:
+        print(f"DEBUG: Unable to load field definitions for credential type {ct.name}: {e}")
+        field_defs = {}
+
+    cred_info = {
+        "id": cred.id,
+        "name": cred.name,
+        "credential_type": ct.name,
+        "created": cred.created.isoformat() if cred.created else None,
+        "modified": cred.modified.isoformat() if cred.modified else None,
+        "organization": None,
+        "access_list": [],
+        "related_job_templates": [],
+        "fields": [],
+    }
+
+    if cred.organization:
+        cred_info["organization"] = {
+            "id": cred.organization.id,
+            "name": cred.organization.name
+        }
+
+    # Build access list for users and teams.
+    for role_attr in ['admin_role', 'use_role', 'read_role']:
+        role_obj = getattr(cred, role_attr, None)
