@@ -12,20 +12,36 @@
       import json
       from awx.main.models import Credential, CredentialType, Organization, Project, JobTemplate, Team, Role, User
       from awx.main.utils.encryption import decrypt_value
+      from django.utils.functional import Promise
+
       SECRET_FIELDS = ["password", "ssh_key_data", "ssh_key_unlock", "become_password", "vault_password", "authorize_password", "secret", "secret_key", "security_token"]
       CRED_TYPES_WITH_SECRETS = ["aws", "azure", "gce", "vmware", "satellite6", "cloudforms", "insights"]
+
+      def stringify_lazy(obj):
+          """Recursively convert lazy translation objects to strings."""
+          if isinstance(obj, Promise):  # Check for the Promise class
+              return str(obj)
+          elif isinstance(obj, dict):
+              return {k: stringify_lazy(v) for k, v in obj.items()}
+          elif isinstance(obj, list):
+              return [stringify_lazy(elem) for elem in obj]
+          else:
+              return obj
+
+
       decrypt_inputs = lambda inputs, cred_type: {} if inputs is None else {k:(decrypt_value(v, None) if (cred_type in CRED_TYPES_WITH_SECRETS and v is not None and k in SECRET_FIELDS and isinstance(v, str) and v.startswith("$encrypted$")) else v) for k,v in inputs.items()}
+
       output = {
-          "credentials": [{"id": c.id, "name": c.name, "credential_type": str(c.credential_type.name), "inputs": decrypt_inputs(c.inputs, c.credential_type.kind)} for c in Credential.objects.all()],
+          "credentials": [{"id": c.id, "name": str(c.name), "credential_type": str(c.credential_type.name), "inputs": decrypt_inputs(c.inputs, c.credential_type.kind)} for c in Credential.objects.all()],
           "credential_types": [{"id": ct.id, "name": str(ct.name), "kind": str(ct.kind)} for ct in CredentialType.objects.all()],
-          "organizations": [{"id": org.id, "name": org.name} for org in Organization.objects.all()],
-          "projects": [{"id": p.id, "name": p.name} for p in Project.objects.all()],
-          "job_templates": [{"id": jt.id, "name": jt.name} for jt in JobTemplate.objects.all()],
-          "teams": [{"id": t.id, "name": t.name} for t in Team.objects.all()],
-          "roles": [{"id": r.id, "name": r.name} for r in Role.objects.all()],
-          "users": [{"id": u.id, "username": u.username} for u in User.objects.all()]
+          "organizations": [{"id": org.id, "name": str(org.name)} for org in Organization.objects.all()],
+          "projects": [{"id": p.id, "name": str(p.name)} for p in Project.objects.all()],
+          "job_templates": [{"id": jt.id, "name": str(jt.name)} for jt in JobTemplate.objects.all()],
+          "teams": [{"id": t.id, "name": str(t.name)} for t in Team.objects.all()],
+          "roles": [{"id": r.id, "name": str(r.name)} for r in Role.objects.all()],
+          "users": [{"id": u.id, "username": str(u.username)} for u in User.objects.all()]
       }
-      print(json.dumps(output))
+      print(json.dumps(stringify_lazy(output)))
       '
   tasks:
     - name: Retrieve AWX objects using awx-manage shell_plus
