@@ -94,7 +94,7 @@
       connection: local
       become: false
       ansible.builtin.set_fact:
-        export_report: "{{ awx_output.stdout | from_json | json_query('credentials[*].name') }}"  # Changed this
+        export_report: "{{ awx_output.stdout | from_json | json_query('credentials[*].name') }}"
       run_once: true
 
     - name: Trigger import handler after export tasks complete
@@ -177,9 +177,11 @@
   tasks:
     - name: Display AWX export/import report
       debug:
-        msg: |
-          === Final Report ===
-          Exported Credentials: {{ export_report | default([]) }}
-          Imported Credentials: {{ import_report.imported | default([]) }}
-          Skipped on import: {{ import_report.skipped | default([]) }}
+        var: report_output
       run_once: true
+      vars:
+        report_output: |
+          === Final Report ===
+          Exported Credentials: {% if export_report | length > 0 %}{{ export_report }}{% else %}None{% endif %}
+          Imported Credentials: {% if import_report.imported | length > 0 %}{{ import_report.imported }}{% else %}None{% endif %}
+          Skipped on import: {% if import_report.skipped | length > 0 %}{{ import_report.skipped }}{% else %}None{% endif %}
