@@ -46,7 +46,7 @@
     - name: Retrieve AWX objects using awx-manage shell_plus
       shell: "{{ awx_export_command }}"
       register: awx_output
-      # changed_when: false  <--- REMOVED
+      # changed_when: false  <--- Removed.  Handlers need a changed task.
 
     - name: Fail if AWX export retrieval failed
       fail:
@@ -57,7 +57,7 @@
       set_fact:
         awx_export_json: "{{ awx_output.stdout | from_json | to_nice_json }}"
 
-    - name: Debug AWX export JSON
+    - name: Debug AWX export JSON  # Keep this for now, in case export has subtle issues
       debug:
         msg: "{{ awx_export_json }}"
       run_once: true
@@ -107,6 +107,11 @@
         name: report
         export_report: "{{ export_report }}"
         import_report: "{{ import_report | default({}) }}"
+        # report_output: |  # Removed: calculate this in the final play
+        #   === Final Report ===
+        #   Exported Credentials: {% if export_report | length > 0 %}{{ export_report }}{% else %}None{% endif %}
+        #   Imported Credentials: {% if import_report.imported | length > 0 %}{{ import_report.imported }}{% else %}None{% endif %}
+        #   Skipped on import: {% if import_report.skipped | length > 0 %}{{ import_report.skipped }}{% else %}None{% endif %}
       run_once: true
 
   handlers:
@@ -143,14 +148,21 @@
                 skipped.append(cred['name']);
             print(json.dumps({'imported': imported, 'skipped': skipped}))"
           register: import_command_result
+          failed_when: false  # CRITICAL: Added back
+
+        - name: Debug Import Result  # CRITICAL: Added back
+          debug:
+            var: import_command_result
+          delegate_to: "{{ destination_host }}"  # Ensure we see output from the correct host
 
         - name: Set import report fact from command output
           delegate_to: localhost
           connection: local
           become: false
           ansible.builtin.set_fact:
-            import_report: "{{ import_command_result.stdout | from_json }}"
+            import_report: "{{ import_command_result.stdout | from_json | default({}) }}"  # Added default({})
           run_once: true
+          failed_when: false # Keep this
 
         - name: Clean up temporary export file on destination host
           file:
@@ -175,10 +187,12 @@
     - community.general
   tasks:
     - name: Display AWX export/import report
-      debug:
-        msg: |
+      debug: #Revert back to original
+        var: report_output
+      run_once: true
+      vars:
+        report_output: |
           === Final Report ===
           Exported Credentials: {% if export_report | length > 0 %}{{ export_report }}{% else %}None{% endif %}
           Imported Credentials: {% if import_report.imported | length > 0 %}{{ import_report.imported }}{% else %}None{% endif %}
           Skipped on import: {% if import_report.skipped | length > 0 %}{{ import_report.skipped }}{% else %}None{% endif %}
-      run_once: true
