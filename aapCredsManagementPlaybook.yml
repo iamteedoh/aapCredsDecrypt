@@ -17,6 +17,10 @@
       register: awx_creds
       changed_when: false
 
+    - name: Debug raw AWX credentials output
+      debug:
+        var: awx_creds.stdout
+
     - name: Fail if retrieval failed
       fail:
         msg: "Failed to retrieve credentials: {{ awx_creds.stderr }}"
