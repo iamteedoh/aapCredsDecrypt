@@ -1,68 +1,67 @@
 ---
-- name: Export credentials from source environment using awx-manage shell_plus
+- name: Export AWX objects and decrypt secret fields using awx-manage shell_plus
   hosts: "{{ source_host | default('sourcesys') }}"
   become: yes
   gather_facts: no
   collections:
     - community.general
   vars:
-    # Use an absolute path for the exported file
     export_file: "/tmp/exported_creds.json"
-    # Command to retrieve credentials from AWX via shell_plus
+    # Updated inline Python snippet with helper lambda decrypt_safe.
     awx_export_command: >
-      awx-manage shell_plus --quiet --command "from awx.main.models import Credential; import json; print(json.dumps([{'id': c.id, 'name': c.name, 'credential_type': c.credential_type.name, 'inputs': c.inputs} for c in Credential.objects.all()]))"
+      awx-manage shell_plus --quiet --command 'import json; from awx.main.models import Credential, CredentialType, Organization, Project, JobTemplate, Team, Role, User; from awx.main.utils.encryption import decrypt_value; SECRET_FIELDS=["password","ssh_key_data","ssh_key_unlock","become_password","vault_password","authorize_password","secret","secret_key","security_token"]; decrypt_safe=lambda v: (decrypt_value(v, None) if (v is not None and isinstance(v, str) and v.startswith("$encrypted$")) else v); decrypt_inputs=lambda inputs: {} if inputs is None else {k: decrypt_safe(v) for k,v in inputs.items()}; output={"credentials":[{"id":c.id, "name":c.name, "credential_type":c.credential_type.name, "inputs":decrypt_inputs(c.inputs)} for c in Credential.objects.all()], "credential_types":[{"id":ct.id, "name":ct.name} for ct in CredentialType.objects.all()], "organizations":[{"id":org.id, "name":org.name} for org in Organization.objects.all()], "projects":[{"id":p.id, "name":p.name} for p in Project.objects.all()], "job_templates":[{"id":jt.id, "name":jt.name} for jt in JobTemplate.objects.all()], "teams":[{"id":t.id, "name":t.name} for t in Team.objects.all()], "roles":[{"id":r.id, "name":r.name} for r in Role.objects.all()], "users":[{"id":u.id, "username":u.username} for u in User.objects.all()]}; print(json.dumps(output))'
   tasks:
-    - name: Retrieve credentials from AWX using awx-manage shell_plus
+    - name: Retrieve AWX objects using awx-manage shell_plus
       shell: "{{ awx_export_command }}"
-      register: awx_creds
+      register: awx_output
       changed_when: false
 
-    - name: Fail if retrieval failed
+    - name: Fail if AWX export retrieval failed
       fail:
-        msg: "Failed to retrieve credentials: {{ awx_creds.stderr }}"
-      when: awx_creds.rc != 0
+        msg: "AWX export failed: {{ awx_output.stderr }}"
+      when: awx_output.rc != 0
 
-    - name: Validate and pretty-print JSON credentials
+    - name: Set output JSON from AWX
       set_fact:
-        creds_json: "{{ awx_creds.stdout | from_json | to_nice_json }}"
+        awx_export_json: "{{ awx_output.stdout | from_json | to_nice_json }}"
 
-    - name: Debug credentials JSON
+    - name: Debug AWX export JSON
       debug:
-        msg: "{{ creds_json }}"
+        msg: "{{ awx_export_json }}"
       run_once: true
 
-    - name: Indicate start of saving credentials file locally
+    - name: Indicate start of saving AWX export to local file
       debug:
-        msg: "Saving credentials to {{ export_file }}"
+        msg: "Saving AWX export to {{ export_file }}"
       run_once: true
 
-    - name: Save credentials to local file
+    - name: Save AWX export to local file
       delegate_to: localhost
       connection: local
       become: false
       ansible.builtin.copy:
         dest: "{{ export_file }}"
-        content: "{{ creds_json }}"
+        content: "{{ awx_export_json }}"
       run_once: true
 
-    - name: Indicate successful saving of credentials file
+    - name: Indicate successful saving of export file
       debug:
-        msg: "Credentials file saved to {{ export_file }}"
+        msg: "AWX export saved to {{ export_file }}"
       run_once: true
 
-    - name: Encrypt the exported credentials file with ansible-vault CLI
+    - name: Encrypt the exported file with ansible-vault CLI
       delegate_to: localhost
       connection: local
       become: false
       shell: ansible-vault encrypt {{ export_file }} --vault-password-file {{ vault_password_file }}
       run_once: true
 
-    - name: Record export report (credential names exported)
+    - name: Record export report
       delegate_to: localhost
       connection: local
       become: false
       ansible.builtin.set_fact:
-        export_report: "{{ {'exported': (creds_json | from_json | map(attribute='name') | list), 'skipped': []} }}"
+        export_report: "{{ {'exported': (awx_export_json | from_json)['credentials'] | map(attribute='name') | list, 'skipped': []} }}"
       run_once: true
 
     - name: Trigger import handler after export tasks complete
@@ -82,30 +81,28 @@
     - name: import_credentials
       tags: import
       block:
-        - name: Decrypt the exported credentials file for import (on localhost)
+        - name: Decrypt the exported file for import (on localhost)
           delegate_to: localhost
           connection: local
           become: false
           shell: ansible-vault decrypt {{ export_file }} --vault-password-file {{ vault_password_file }} --output=/tmp/decrypted_creds.json
           run_once: true
 
-        - name: Copy decrypted credentials file to destination host
+        - name: Copy decrypted file to destination host
           copy:
             src: "/tmp/decrypted_creds.json"
-            dest: "/tmp/new_creds.json"
+            dest: "/tmp/new_export.json"
           delegate_to: "{{ destination_host }}"
 
-        - name: Import credentials using awx-manage shell_plus on destination host
+        - name: Import AWX objects using awx-manage shell_plus on destination host
           delegate_to: "{{ destination_host }}"
           become: yes
           shell: >
-            awx-manage shell_plus --quiet --command "import json;
-            from awx.main.models import Credential, CredentialType;
-            with open('/tmp/new_creds.json') as f:
-                new_creds = json.load(f);
-            imported = [];
-            skipped = [];
-            for cred in new_creds:
+            awx-manage shell_plus --quiet --command "import json; from awx.main.models import Credential, CredentialType, Organization, Project, JobTemplate, Team, Role, User; 
+            with open('/tmp/new_export.json') as f:
+                data = json.load(f);
+            imported = []; skipped = [];
+            for cred in data.get('credentials', []):
                 if not Credential.objects.filter(name=cred['name']).exists():
                     ct = CredentialType.objects.get(name=cred['credential_type']);
                     Credential.objects.create(name=cred['name'], credential_type=ct, inputs=cred['inputs']);
@@ -123,14 +120,14 @@
             import_report: "{{ import_command_result.stdout | from_json }}"
           run_once: true
 
-        - name: Clean up temporary credentials file on destination host
+        - name: Clean up temporary export file on destination host
           file:
-            path: "/tmp/new_creds.json"
+            path: "/tmp/new_export.json"
             state: absent
           delegate_to: "{{ destination_host }}"
           become: yes
 
-        - name: Remove decrypted credentials file on control node
+        - name: Remove decrypted file on control node
           delegate_to: localhost
           connection: local
           become: false
@@ -139,18 +136,18 @@
             state: absent
           run_once: true
 
-- name: Print final credentials report
+- name: Print final AWX export/import report
   hosts: report
   gather_facts: no
   collections:
     - community.general
   tasks:
-    - name: Display credentials export/import report
+    - name: Display AWX export/import report
       debug:
         msg: |
           === Final Report ===
           Exported Credentials: {{ export_report.exported | default([]) }}
-          Imported Credentials: {{ import_report.imported | default('None') }}
+          Imported Credentials: {{ import_report.imported | default("None") }}
           {% if (export_report.skipped | default([])) | length > 0 %}
           Skipped on export: {{ export_report.skipped | default([]) }}
           {% endif %}
