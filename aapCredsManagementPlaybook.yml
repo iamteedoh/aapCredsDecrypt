@@ -32,6 +32,7 @@
 
     - name: Save credentials to local file
       delegate_to: localhost
+      connection: local
       copy:
         dest: "{{ export_file }}"
         content: "{{ creds_json }}"
