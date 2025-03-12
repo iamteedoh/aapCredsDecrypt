@@ -47,7 +47,7 @@
     - name: Retrieve AWX objects using awx-manage shell_plus
       shell: "{{ awx_export_command }}"
       register: awx_output
-      # changed_when: false  <- Removed:  Handlers NEED a changed task.
+      # changed_when: false  <- Removed: Handlers NEED a changed task
 
     - name: Fail if AWX export retrieval failed
       fail:
@@ -58,7 +58,7 @@
       set_fact:
         awx_export_json: "{{ awx_output.stdout | from_json | to_nice_json }}"
 
-    - name: Debug AWX export JSON  # Keep this until you're sure everything is perfect
+    - name: Debug AWX export JSON
       debug:
         msg: "{{ awx_export_json }}"
       run_once: true
@@ -94,7 +94,7 @@
       connection: local
       become: false
       ansible.builtin.set_fact:
-        export_report: "{{ {'exported': (awx_output.stdout | from_json)['credentials'] | map(attribute='name') | list, 'skipped': []} }}"  # Back to dictionary structure
+        export_report: "{{ {'exported': (awx_output.stdout | from_json)['credentials'] | map(attribute='name') | list, 'skipped': []} }}"  # Keep as dictionary
       run_once: true
 
     - name: Trigger import handler after export tasks complete
@@ -107,7 +107,7 @@
       ansible.builtin.add_host:
         name: report
         export_report: "{{ export_report }}"
-        import_report: "{{ import_report | default({}) }}"  # Keep the default for now, in case of import errors
+        import_report: "{{ import_report | default({}) }}"  # Keep default for robustness
       run_once: true
 
   handlers:
@@ -144,22 +144,14 @@
                 skipped.append(cred['name']);
             print(json.dumps({'imported': imported, 'skipped': skipped}))"
           register: import_command_result
-          # failed_when: false  <- Removed. We want to know *if* it fails, but the debug task is gone now.
-          #   If it *does* fail, we'll add these back TEMPORARILY to debug.
-
-        - name: Debug Import Result  # REMOVED. Only add this back if import fails.
-          debug:
-            var: import_command_result
-          delegate_to: "{{ destination_host }}"
 
         - name: Set import report fact from command output
           delegate_to: localhost
           connection: local
           become: false
           ansible.builtin.set_fact:
-            import_report: "{{ import_command_result.stdout | from_json | default({}) }}"  # Keep default({}) for robustness
+            import_report: "{{ import_command_result.stdout | from_json | default({}) }}" # Keep the default here
           run_once: true
-          # failed_when: false  <- Removed.  We want to know if *this* fails.
 
         - name: Clean up temporary export file on destination host
           file:
@@ -187,7 +179,7 @@
       debug:
         msg: |
           === Final Report ===
-          Exported Credentials: {% if export_report.exported | length > 0 %}{{ export_report.exported }}{% else %}None{% endif %}
-          Imported Credentials: {% if import_report.imported | length > 0 %}{{ import_report.imported }}{% else %}None{% endif %}
-          Skipped on import: {% if import_report.skipped | length > 0 %}{{ import_report.skipped }}{% else %}None{% endif %}
+          Exported Credentials: {{ export_report.exported | default([]) }}
+          Imported Credentials: {{ import_report.get('imported', []) | default([]) }}
+          Skipped on import: {{ import_report.get('skipped', []) | default([]) }}
       run_once: true
