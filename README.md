@@ -73,6 +73,96 @@ This script is a utility to manage AWX/AAP credentials by decrypting sensitive f
 
 ---
 
+## Flowchart of aapCreds.py
+
+# Flowchart for aapCreds
+
+```mermaid
+flowchart LR
+    %% Main Flow
+    A[Start Command] --> B{"Quiet Mode?"}
+    B -- "Yes" --> C[Non-Interactive Mode]
+    B -- "No" --> F[Interactive Mode]
+    C --> Z[End]
+    F --> Z[End]
+
+    %% Non-Interactive Subgraph
+    subgraph NonInteractive [Non-Interactive Mode]
+      direction LR
+      C --> D{"Export?"}
+      D -- "Yes" --> E[Decrypt All Credentials]
+      D -- "No" --> G{"Import?"}
+      
+      E --> H[Write to File]
+      H --> I[Export End]
+      
+      D -- "No Export File" --> J[Export Error: No File Specified]
+      J --> Z
+      
+      G -- "Yes" --> K[Read Import File]
+      K --> L[Process Imports]
+      L --> M[Import End]
+      G -- "No" --> Z
+      G -- "No Import File" --> N[Import Error: No File Specified]
+      N --> Z
+    end
+
+    %% Interactive Subgraph
+    subgraph Interactive [Interactive Mode]
+      direction LR
+      F --> O{"Menu Options"}
+      
+      O -- "Option 1" --> P[List Credential Types]
+      O -- "Option 2" --> Q[Decrypt All]
+      O -- "Option 3" --> R[Decrypt Specific]
+      O -- "Option 4" --> S[Import from File]
+      O -- "Option 5" --> T[Exit]
+      O -- "Invalid Option" --> U[Invalid Option]
+      
+      P --> O
+      Q --> V[Output Results]
+      R --> V
+      V --> O
+      S --> W[Process Import File]
+      W --> O
+      U --> O
+      T --> Z
+    end
+
+    %% Styling nodes with darker font colors for better contrast
+    style A fill:#C8E6C9,stroke:#555,stroke-width:2px,color:#000
+    style B fill:#FFF9C4,stroke:#555,stroke-width:2px,color:#000
+    style C fill:#BBDEFB,stroke:#555,stroke-width:2px,color:#000
+    style F fill:#FFCCBC,stroke:#555,stroke-width:2px,color:#000
+    style Z fill:#F5F5F5,stroke:#555,stroke-width:2px,color:#000
+
+    style D fill:#FFF9C4,stroke:#555,stroke-width:2px,color:#000
+    style E fill:#C8E6C9,stroke:#555,stroke-width:2px,color:#000
+    style H fill:#BBDEFB,stroke:#555,stroke-width:2px,color:#000
+    style I fill:#F5F5F5,stroke:#555,stroke-width:2px,color:#000
+    style J fill:#FFCDD2,stroke:#555,stroke-width:2px,color:#000
+    style G fill:#FFF9C4,stroke:#555,stroke-width:2px,color:#000
+    style K fill:#BBDEFB,stroke:#555,stroke-width:2px,color:#000
+    style L fill:#C8E6C9,stroke:#555,stroke-width:2px,color:#000
+    style M fill:#F5F5F5,stroke:#555,stroke-width:2px,color:#000
+    style N fill:#FFCDD2,stroke:#555,stroke-width:2px,color:#000
+
+    style O fill:#FFF9C4,stroke:#555,stroke-width:2px,color:#000
+    style P fill:#BBDEFB,stroke:#555,stroke-width:2px,color:#000
+    style Q fill:#C8E6C9,stroke:#555,stroke-width:2px,color:#000
+    style R fill:#C8E6C9,stroke:#555,stroke-width:2px,color:#000
+    style S fill:#BBDEFB,stroke:#555,stroke-width:2px,color:#000
+    style T fill:#F5F5F5,stroke:#555,stroke-width:2px,color:#000
+    style U fill:#FFCDD2,stroke:#555,stroke-width:2px,color:#000
+    style V fill:#BBDEFB,stroke:#555,stroke-width:2px,color:#000
+    style W fill:#C8E6C9,stroke:#555,stroke-width:2px,color:#000
+
+    %% Force straight arrow lines
+    linkStyle default interpolation linear
+```
+
+---
+
 ## Installation and Setup
 
 1. **Import the Script:**  

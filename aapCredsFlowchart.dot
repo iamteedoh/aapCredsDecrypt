@@ -1,0 +1,103 @@
+digraph aapCreds_flowchart {
+    rankdir=LR;
+    node [shape=box, style="rounded,filled", fillcolor="#E0E8F0"];
+    edge [color="#555555"];
+
+    // Main Nodes
+    start [label="Start Command", fillcolor="#C8E6C9"];
+    check_quiet [shape=diamond, label="Quiet Mode?", fillcolor="#FFF9C4"];
+    non_interactive [label="Non-Interactive Mode", fillcolor="#BBDEFB"];
+    interactive [label="Interactive Mode", fillcolor="#FFCCBC"];
+    end [label="End", fillcolor="#F5F5F5"];
+
+    // Main Flow
+    start -> check_quiet;
+    check_quiet -> non_interactive [label="Yes"];
+    check_quiet -> interactive [label="No"];
+    non_interactive -> end;
+    interactive -> end;
+
+    // Non-Interactive Subgraph
+    subgraph cluster_non_interactive {
+        label = "Non-Interactive Mode";
+        style="rounded,filled";
+        fillcolor="#E3F2FD";
+
+        export_check [shape=diamond, label="Export?", fillcolor="#FFF9C4"];
+        import_check [shape=diamond, label="Import?", fillcolor="#FFF9C4"];
+
+        non_interactive -> export_check;
+        export_check -> export_decrypt [label="Yes"];
+        export_check -> import_check [label="No"];
+
+        export_decrypt [label="Decrypt All Credentials", fillcolor="#C8E6C9"];
+        export_write [label="Write to File", fillcolor="#BBDEFB"];
+        export_error [label="Export Error: No File Specified", fillcolor="#FFCDD2"];
+        export_end [label="Export End", fillcolor="#F5F5F5"];
+
+        export_decrypt -> export_write;
+        export_write -> export_end;
+        export_check -> export_error [label="No Export File"];
+        export_error -> end;
+
+        import_check -> import_read [label="Yes"];
+        import_check -> end [label="No"];
+
+        import_read [label="Read Import File", fillcolor="#BBDEFB"];
+        import_process [label="Process Imports", fillcolor="#C8E6C9"];
+        import_end [label="Import End", fillcolor="#F5F5F5"];
+        import_error_import [label="Import Error: No File Specified", fillcolor="#FFCDD2"];
+
+        import_read -> import_process;
+        import_process -> import_end;
+        import_check -> import_error_import [label="No Import File"];
+        import_error_import -> end;
+    }
+
+    // Interactive Subgraph
+    subgraph cluster_interactive {
+        label = "Interactive Mode";
+        style="rounded,filled";
+        fillcolor="#FFE0B2";
+
+        interactive -> interactive_menu;
+        interactive_menu [shape=diamond, label="Menu Options", fillcolor="#FFF9C4"];
+
+        // Define interactive option nodes
+        list_types        [label="List Credential Types", fillcolor="#BBDEFB"];
+        decrypt_all       [label="Decrypt All", fillcolor="#C8E6C9"];
+        decrypt_specific  [label="Decrypt Specific", fillcolor="#C8E6C9"];
+        import_file_menu  [label="Import from File", fillcolor="#BBDEFB"];
+        exit_option       [label="Exit", fillcolor="#F5F5F5"];
+        invalid_option    [label="Invalid Option", fillcolor="#FFCDD2"];
+
+        // Force horizontal ordering of options using an invisible chain
+        { rank = same; list_types; decrypt_all; decrypt_specific; import_file_menu; exit_option; invalid_option; }
+        list_types -> decrypt_all [style=invis];
+        decrypt_all -> decrypt_specific [style=invis];
+        decrypt_specific -> import_file_menu [style=invis];
+        import_file_menu -> exit_option [style=invis];
+        exit_option -> invalid_option [style=invis];
+
+        // Visible edges from the menu node to each option (with labels)
+        interactive_menu -> list_types       [label="Option 1"];
+        interactive_menu -> decrypt_all      [label="Option 2"];
+        interactive_menu -> decrypt_specific [label="Option 3"];
+        interactive_menu -> import_file_menu [label="Option 4"];
+        interactive_menu -> exit_option      [label="Option 5"];
+        interactive_menu -> invalid_option   [label="Invalid Option"];
+
+        // Additional flows
+        list_types -> interactive_menu;
+        decrypt_all -> output_results_menu;
+        decrypt_specific -> output_results_menu;
+        import_file_menu -> import_file_process;
+        import_file_process -> interactive_menu;
+        output_results_menu [label="Output Results", fillcolor="#BBDEFB"];
+        output_results_menu -> interactive_menu;
+        invalid_option -> interactive_menu;
+        exit_option -> end;  // Connect Exit to End
+
+        import_file_process [label="Process Import File", fillcolor="#C8E6C9"];
+    }
+}
