@@ -240,7 +240,7 @@ When importing, the script checks for duplicates (credentials with the same name
 
 ---
 
-## Non-Interactive:
+## Non-Interactive
 
   This script can can be executed non-interactively by using the `--quiet` option, which will require the following additional flag(s):
     * For non-interactivity: `--quiet`
