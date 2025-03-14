@@ -221,11 +221,11 @@ If you do have access, proceed. If you don't, make sure you are on a server, typ
 2. ### Interactive Main Menu:
 
   Upon execution, the script displays a menu with the following options:
-    - **Option 1**: List all used Credential Types
-    - **Option 2**: Decrypt ALL Credentials.
-    - **Option 3**: Decrypt specific credentials by entering a comma-separated list of Credential IDs.
-    - **Option 4**: Import credentials from a JSON file.
-    - **Option 4**: Exit
+    * **Option 1**: List all used Credential Types
+    * **Option 2**: Decrypt ALL Credentials.
+    * **Option 3**: Decrypt specific credentials by entering a comma-separated list of Credential IDs.
+    * **Option 4**: Import credentials from a JSON file.
+    * **Option 4**: Exit
 
 3. ### Output Options (for Decryption):
 
@@ -243,12 +243,12 @@ When importing, the script checks for duplicates (credentials with the same name
 ## Non-Interactive:
 
   This script can can be executed non-interactively by using the `--quiet` option, which will require the following additional flag(s):
-    - For non-interactivity: `--quiet`
-      - This flag is mutually exclusive with the `import` and `export` flags
-    - For exporting credentials: `--export --export-file={{ creds_file }}`
-      - This flag exports the decrypted credentials to a given filename
-    - For importing credentials: `--import --import-file={{ creds_file }}`
-      - This flag imports the credentials, which in-turn become decrypted, using a given filename
+    * For non-interactivity: `--quiet`
+      * This flag is mutually exclusive with the `import` and `export` flags
+    * For exporting credentials: `--export --export-file={{ creds_file }}`
+      * This flag exports the decrypted credentials to a given filename
+    * For importing credentials: `--import --import-file={{ creds_file }}`
+      * This flag imports the credentials, which in-turn become decrypted, using a given filename
 
   **Side Note** Does it offer a `--help` option to see how to run this?
 
@@ -281,9 +281,9 @@ When importing, the script checks for duplicates (credentials with the same name
 
 2. **Import and Script**:
 
-    - Save the script as **aapCreds.py** onto your AWX/AAP server, where the required Python environment is active (typically a controller node).
-    - The script should be saved to the following location on AAP: `/var/lib/awx/venv/awx/lib/python3.9/site-packages/awx/main/management/commands/aapCreds.py`
-      - This allows the script to be used as an `awx-manage` plugin|module instead of running it separately. This simplifies things when using the `command` module in an
+    * Save the script as **aapCreds.py** onto your AWX/AAP server, where the required Python environment is active (typically a controller node).
+    * The script should be saved to the following location on AAP: `/var/lib/awx/venv/awx/lib/python3.9/site-packages/awx/main/management/commands/aapCreds.py`
+      * This allows the script to be used as an `awx-manage` plugin|module instead of running it separately. This simplifies things when using the `command` module in an
         Ansible playbook
 
 3. **Apply Appropriate Permissions**:
@@ -297,9 +297,9 @@ When importing, the script checks for duplicates (credentials with the same name
 4. **Create Ansible Playbook for Execution**: (Option 1)
 
     If you would like to run this script as an Ansible Playbook, you'll need to create a playbook that offers the following tasks:
-      - A task for the export process (if necessary)
-      - A task for the import process (if necessary)
-      - A cleanup task to remove the decrypted file (if necessary)
+      * A task for the export process (if necessary)
+      * A task for the import process (if necessary)
+      * A cleanup task to remove the decrypted file (if necessary)
 
     Here is a sample playbook called `credentials_tasks.yml`:
 
@@ -384,90 +384,90 @@ When importing, the script checks for duplicates (credentials with the same name
 
 ### list_used_credential_types
 
-    - **Purpose**:
+    * **Purpose**:
         Retrieve a list of `CredentialType` objects that are actively used by at least one `Credential`.
 
-    - **Implementation**:
+    * **Implementation**:
         Collects distinct credential type IDs from the `Credential` objects and filters the `CredentialType` queryset accordingly.
 
 ### get_teams_from_role
 
-    - **Purpose**:
+    * **Purpose**:
         Given a `Role` object, returns the associated list of `Team` objects.
 
-    - **Implementation**:
+    * **Implementation**:
         Handles differences across AWX/AAP versions by checking for attributes like `team_set` or `teams`, iterating over related objects, if necessary.
 
 ### decrypt_single_credential
 
-    - **Purpose**:
+    * **Purpose**:
         Decrypts a single credential and builds a detailed dictionary including:
 
-        - Credential metadata (ID, name, type, creation/modification dates)
-        - Organization details
-        - Access list (users and teams)
-        - Related job templates
-        - Decrypted input fields
+        * Credential metadata (ID, name, type, creation/modification dates)
+        * Organization details
+        * Access list (users and teams)
+        * Related job templates
+        * Decrypted input fields
 
-    - **Implementation**:
+    * **Implementation**:
         Iterates through each field, decrypting secret fields using `decrypt_field` while preserving original values for non-secret fields.
 
 ### decrypt_credentials_by_ids
 
-    - **Purpose**:
+    * **Purpose**:
         Fetches and decrypts credentials based on a list of provided Credential IDs.
 
-    - **Implementation**:
+    * **Implementation**:
         Uses Django's ORM to filter credentials by IDs, applying `decrypt_single_credential` for each.
 
 ### decrypt_all_credentials
 
-    - **Purpose**:
+    * **Purpose**:
         Decrypts every credential stored in the AWX system.
 
-    - **Implementation**:
+    * **Implementation**:
         Retrieves all credentials via the ORM and processes each eith `decrypt_single_credential`.
 
 ### ouput_results
 
-    - **Purpose**:
+    * **Purpose**:
        Provides options for outputting decrypted credentials:
-        - Standard output (console)
-        - Saving to a JSON file
-        - Both
+        * Standard output (console)
+        * Saving to a JSON file
+        * Both
 
-    - **Implementation**:
+    * **Implementation**:
         Formats the output as JSON and prompts for the preferred method of display and storage.
 
 ### import_credential
 
-    - **Purpose**:
+    * **Purpose**:
         Imports a single credential from a dictionary (parsed from a JSON export).
 
-    - **Implementation**:
+    * **Implementation**:
         Validates the existence of the corresponding name, CredentialType, and Organization; checks for duplicates; then creates the new `Credential` object and restores role memberships and associations with job templates.
 
 ### import_credentials_from_file
 
-    - **Purpose**:
+    * **Purpose**:
         Imports multiple credentials from a JSON file.
 
-    - **Implementation**:
+    * **Implementation**:
         Reads JSON data from a specified file, iterating over each credential's data to invoke `import_credential`. Summarizes the count of imported credentials and lists duplicates skipped.
 
 ### interactive_memu (In interactive mode only)
 
-    - **Purpose**:
-        - Serves as the primary control loop offering an interactive menu.
-        - It captures and validates the user's input, ensuring that only a valid selection proceeds.
-        - Depending on the user's choice, it calls the corresponding function (for example, it might call the decryption functions or the import 
+    * **Purpose**:
+        * Serves as the primary control loop offering an interactive menu.
+        * It captures and validates the user's input, ensuring that only a valid selection proceeds.
+        * Depending on the user's choice, it calls the corresponding function (for example, it might call the decryption functions or the import 
           function).
-        - It typically loops back to the menu after completing an action, allowing the user to perform multiple operations in one session until
+        * It typically loops back to the menu after completing an action, allowing the user to perform multiple operations in one session until
           they choose to exit
-        - Essentially, `interactive_menu()` orchestrates the interactive flow of the program and keeps the user engaged until they decide to
+        * Essentially, `interactive_menu()` orchestrates the interactive flow of the program and keeps the user engaged until they decide to
           stop.
 
-    - **Implemenation**:
+    * **Implemenation**:
         Displays the main menu with options to list credential types, decrypt credentials (all or specific), import credentials, or exit;
         processes user input accordingly until exit is chosen.
 
@@ -475,13 +475,13 @@ When importing, the script checks for duplicates (credentials with the same name
 
 ## Troubleshooting
 
-- **Import Errors**:
+    * **Import Errors**:
     If errors occur regarding AWX/AAP models, ensure the script is run within the AWX/AAP environment.
 
-- **Decryption Failures**:
+    * **Decryption Failures**:
     Should a decryption process fail for any field, the error is captured, and the field's value is set to `None`. Check console output for details.
 
-- **File I/O Issues**:
+    * **File I/O Issues**:
     Verify that file paths provided for saving or importing JSON data are accessible and that proper permissions are set.
 
 ---
@@ -492,25 +492,25 @@ When importing, the script checks for duplicates (credentials with the same name
 
     In many AWX/AAP management scripts, including this one, a separate `main()` function isn't strictly necessary because of the following
     reasons:
-      - **Direct Execution in AWX/AAP**: The script is intended to be run within the AWP/AAP environment, often via the `awx-manage` command or within an interactive shell. In these contexts, the script's top-level code, which includes the call to `interactive_menu()`, is executed immediately. This direct execution pattern makes an explicit `main()` wrapper redundant.
-      - **Integration with AWX Management Commands**: AWX management commands are typically structured so that the entry point is defined by the command registration. The AWX framework calls the script directly, so embedding all logic at the top level or via an immediate call to the interactive menu is both acceptable and common.
+      * **Direct Execution in AWX/AAP**: The script is intended to be run within the AWP/AAP environment, often via the `awx-manage` command or within an interactive shell. In these contexts, the script's top-level code, which includes the call to `interactive_menu()`, is executed immediately. This direct execution pattern makes an explicit `main()` wrapper redundant.
+      * **Integration with AWX Management Commands**: AWX management commands are typically structured so that the entry point is defined by the command registration. The AWX framework calls the script directly, so embedding all logic at the top level or via an immediate call to the interactive menu is both acceptable and common.
 
       In short, the script is designed to run immediately when invoked in its intended environment, so a separate `main()` function is optional.
 
 ### Why `awx-manage aapCreds ...` used vs `awx-manage aapCreds.py ...` considering the script name is aapCreds.py?
 
     The usage of `awx-manage aapCreds` is based on how AWX registers and invokes management commands:
-      - **Registered Command Name**: The script has been integrated in AWX as a management command with the name aapCreds. When you call `awx-manage aapCreds`, you are invoking that specific command.
-      - **Syntax Requirements**: The `awx-manage` tool expects a clean command name. Adding extraneous characters, such as a trailing question mark or a field separator, such as a period (.), would not match the registered command name and would lead to errors or unexpected behavior. In other words, the command is designed to be called without any punctuation byond the command name. The `awx-manage` tool will strip the script name and only use the basename.
+      * **Registered Command Name**: The script has been integrated in AWX as a management command with the name aapCreds. When you call `awx-manage aapCreds`, you are invoking that specific command.
+      * **Syntax Requirements**: The `awx-manage` tool expects a clean command name. Adding extraneous characters, such as a trailing question mark or a field separator, such as a period (.), would not match the registered command name and would lead to errors or unexpected behavior. In other words, the command is designed to be called without any punctuation byond the command name. The `awx-manage` tool will strip the script name and only use the basename.
 
 ---
 
 ## Contributing
 
 Contributions and improvements to the script are welcome. When submitting changes:
-    - Ensure compatibility with the AWX/AAP environment.
-    - Update this README accordingly.
-    - Provide clear commit messages and documentation for any new features.
+    * Ensure compatibility with the AWX/AAP environment.
+    * Update this README accordingly.
+    * Provide clear commit messages and documentation for any new features.
 
 ---
 
