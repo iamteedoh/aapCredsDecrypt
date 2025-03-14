@@ -166,21 +166,24 @@ flowchart LR
 
 ---
 
-## Installation and Setup
+## Installation and Setup (Outside Playbooks)
 
-1. **Import and Script**:
-Save the script as **aapCreds.py** onto your AWX/AAP server where the required Python environment is active (typically on your controller node). The location is usually found in `/var/lib/awx/venv/awx/lib/python3.9/site-packages/awx/main/management/commands`
+### Running Script Outside of an Ansible Playbook
 
-2. **Apply Appropriate Permissions**:
-This is optional considering the Django framework will read in the file and execute the code. However, just in case you need to make it executable, here's how:
-```shell
-chmod +x aapCreds.py
-```
-
-3. **Environment Verification**:
+1. **Environment Verification**:
 Confirm you have access to AWX models by running an interactive shell:
 ```shell
 awx-manage shell_plus
+```
+If you do have access, proceed. If you don't, make sure you are on a server, typically a controller node, that does have access.
+
+2. **Import and Script**:
+Save the script as **aapCreds.py** onto your AWX/AAP server where the required Python environment is active (typically on your controller node). The location is usually found in `/var/lib/awx/venv/awx/lib/python3.9/site-packages/awx/main/management/commands`
+
+3. **Apply Appropriate Permissions**:
+This is optional considering the Django framework will read in the file and execute the code. However, just in case you need to make it executable, here's how:
+```shell
+chmod +x aapCreds.py
 ```
 
 ---
@@ -189,33 +192,45 @@ awx-manage shell_plus
 
 1. ### Start the Script:
 
-Run the script in the AWX/AAP environment
+Become a user with elevated priveleges, typically root:
 
 ```shell
-./aapCreds.py
+sudo su -
 ```
 
-Alternatively, execute the script within an AWX shell:
+Drop into the Django ORM:
+
+```shell
+awx-manage shell_plus
+```
+
+Execute the script within an AWX shell:
 
 ```python
 exec(open("/path/to/aapCreds.py").read())
 ```
 
+**Note**: Alternatively, you can execute the script in the AWX/AAP environment **(Not Recommended)**
+
+```shell
+./aapCreds.py
+```
+
 2. ### Interactive Main Menu:
 
 Upon execution, the script displays a menu with the following options:
-* **Option 1**: List all used Credential Types
-* **Option 2**: Decrypt ALL Credentials.
-* **Option 3**: Decrypt specific credentials by entering a comma-separated list of Credential IDs.
-* **Option 4**: Import credentials from a JSON file.
-* **Option 4**: Exit
+  - **Option 1**: List all used Credential Types
+  - **Option 2**: Decrypt ALL Credentials.
+  - **Option 3**: Decrypt specific credentials by entering a comma-separated list of Credential IDs.
+  - **Option 4**: Import credentials from a JSON file.
+  - **Option 4**: Exit
 
 3. ### Output Options (for Decryption):
 
 After decryption, choose whether to:
-* Print the decrypted data to the console.
-* Save the decrypted data to a file.
-* Both print and save the results.
+  * Print the decrypted data to the console.
+  * Save the decrypted data to a file.
+  * Both print and save the results.
 
 4. ### Import Process:
 
@@ -227,96 +242,96 @@ When importing, the script checks for duplicates (credentials with the same name
 
 ### list_used_credential_types
 
-    * **Purpose**:
+    - **Purpose**:
         Retrieve a list of `CredentialType` objects that are actively used by at least one `Credential`.
 
-    * **Implementation**:
+    - **Implementation**:
         Collects distinct credential type IDs from the `Credential` objects and filters the `CredentialType` queryset accordingly.
 
 ### get_teams_from_role
 
-    * **Purpose**:
+    - **Purpose**:
         Given a `Role` object, returns the associated list of `Team` objects.
 
-    * **Implementation**:
+    - **Implementation**:
         Handles differences across AWX/AAP versions by checking for attributes like `team_set` or `teams`, iterating over related objects, if necessary.
 
 ### decrypt_single_credential
 
-    * **Purpose**:
+    - **Purpose**:
         Decrypts a single credential and builds a detailed dictionary including:
 
-        * Credential metadata (ID, name, type, creation/modification dates)
-        * Organization details
-        * Access list (users and teams)
-        * Related job templates
-        * Decrypted input fields
+        - Credential metadata (ID, name, type, creation/modification dates)
+        - Organization details
+        - Access list (users and teams)
+        - Related job templates
+        - Decrypted input fields
 
-    * **Implementation**:
+    - **Implementation**:
         Iterates through each field, decrypting secret fields using `decrypt_field` while preserving original values for non-secret fields.
 
 ### decrypt_credentials_by_ids
 
-    * **Purpose**:
+    - **Purpose**:
         Fetches and decrypts credentials based on a list of provided Credential IDs.
 
-    * **Implementation**:
+    - **Implementation**:
         Uses Django's ORM to filter credentials by IDs, applying `decrypt_single_credential` for each.
 
 ### decrypt_all_credentials
 
-    * **Purpose**:
+    - **Purpose**:
         Decrypts every credential stored in the AWX system.
 
-    * **Implementation**:
+    - **Implementation**:
         Retrieves all credentials via the ORM and processes each eith `decrypt_single_credential`.
 
 ### ouput_results
 
-    * **Purpose**:
+    - **Purpose**:
        Provides options for outputting decrypted credentials:
-        * Standard output (console)
-        * Saving to a JSON file
-        * Both
+        - Standard output (console)
+        - Saving to a JSON file
+        - Both
 
-    * **Implementation**:
+    - **Implementation**:
         Formats the output as JSON and prompts for the preferred method of display and storage.
 
 ### import_credential
 
-    * **Purpose**:
+    - **Purpose**:
         Imports a single credential from a dictionary (parsed from a JSON export).
 
-    * **Implementation**:
+    - **Implementation**:
         Validates the existence of the corresponding name, CredentialType, and Organization; checks for duplicates; then creates the new `Credential` object and restores role memberships and associations with job templates.
 
 ### import_credentials_from_file
 
-    * **Purpose**:
+    - **Purpose**:
         Imports multiple credentials from a JSON file.
 
-    * **Implementation**:
+    - **Implementation**:
         Reads JSON data from a specified file, iterating over each credential's data to invoke `import_credential`. Summarizes the count of imported credentials and lists duplicates skipped.
 
 ### main
 
-    * **Purpose**:
+    - **Purpose**:
         Serves as the primary control loop offering an interactive menu.
 
-    * **Implemenation**:
+    - **Implemenation**:
         Displays the main menu with options to list credential types, decrypt credentials (all or specific), import credentials, or exit; processes user input accordingly until exit is chosen.
 
 ---
 
 ## Troubleshooting
 
-* **Import Errors**:
+- **Import Errors**:
     If errors occur regarding AWX/AAP models, ensure the script is run within the AWX/AAP environment.
 
-* **Decryption Failures**:
+- **Decryption Failures**:
     Should a decryption process fail for any field, the error is captured, and the field's value is set to `None`. Check console output for details.
 
-* **File I/O Issues**:
+- **File I/O Issues**:
     Verify that file paths provided for saving or importing JSON data are accessible and that proper permissions are set.
 
 ---
@@ -324,9 +339,9 @@ When importing, the script checks for duplicates (credentials with the same name
 ## Contributing
 
 Contributions and improvements to the script are welcome. When submitting changes:
-    * Ensure compatibility with the AWX/AAP environment.
-    * Update this README accordingly.
-    * Provide clear commit messages and documentation for any new features.
+    - Ensure compatibility with the AWX/AAP environment.
+    - Update this README accordingly.
+    - Provide clear commit messages and documentation for any new features.
 
 ---
 
