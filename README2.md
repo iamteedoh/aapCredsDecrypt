@@ -166,7 +166,7 @@ flowchart LR
 
 ---
 
-## Installation and Setup - Option 1 (Outside Playbooks)
+## Installation and Setup - Option 1 (Outside of Playbooks)
 
 ### Running Script Outside of an Ansible Playbook
 
