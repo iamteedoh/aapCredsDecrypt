@@ -166,7 +166,7 @@ flowchart LR
 
 ---
 
-## Installation and Setup (Outside Playbooks)
+## Installation and Setup - Option 1 (Outside Playbooks)
 
 ### Running Script Outside of an Ansible Playbook
 
@@ -178,13 +178,15 @@ awx-manage shell_plus
 If you do have access, proceed. If you don't, make sure you are on a server, typically a controller node, that does have access.
 
 2. **Import and Script**:
-Save the script as **aapCreds.py** onto your AWX/AAP server where the required Python environment is active (typically on your controller node). The location is usually found in `/var/lib/awx/venv/awx/lib/python3.9/site-packages/awx/main/management/commands`
+
+  Save the script as **aapCreds.py** onto your AWX/AAP server where the required Python environment is active (typically on your controller node).
 
 3. **Apply Appropriate Permissions**:
-This is optional considering the Django framework will read in the file and execute the code. However, just in case you need to make it executable, here's how:
-```shell
-chmod +x aapCreds.py
-```
+    
+  When executing the script manually, you'll need to ensure proper execute permissions. You can do so by running the following command:
+    ```shell
+    chmod +x aapCreds.py
+    ```
 
 ---
 
@@ -192,42 +194,42 @@ chmod +x aapCreds.py
 
 1. ### Start the Script:
 
-Become a user with elevated priveleges, typically root:
+  Become a user with elevated priveleges, typically root:
 
-```shell
-sudo su -
-```
+  ```shell
+  sudo su -
+  ```
 
-Drop into the Django ORM:
+  Drop into the Django ORM:
 
-```shell
-awx-manage shell_plus
-```
+  ```shell
+  awx-manage shell_plus
+  ```
 
-Execute the script within an AWX shell:
+  Execute the script within an AWX shell:
 
-```python
-exec(open("/path/to/aapCreds.py").read())
-```
+  ```python
+  exec(open("/path/to/aapCreds.py").read())
+  ```
 
-**Note**: Alternatively, you can execute the script in the AWX/AAP environment **(Not Recommended)**
+  **Note**: Alternatively, you can execute the script in the AWX/AAP environment **(Not Recommended)**
 
-```shell
-./aapCreds.py
-```
+  ```shell
+  ./aapCreds.py
+  ```
 
 2. ### Interactive Main Menu:
 
-Upon execution, the script displays a menu with the following options:
-  - **Option 1**: List all used Credential Types
-  - **Option 2**: Decrypt ALL Credentials.
-  - **Option 3**: Decrypt specific credentials by entering a comma-separated list of Credential IDs.
-  - **Option 4**: Import credentials from a JSON file.
-  - **Option 4**: Exit
+  Upon execution, the script displays a menu with the following options:
+    - **Option 1**: List all used Credential Types
+    - **Option 2**: Decrypt ALL Credentials.
+    - **Option 3**: Decrypt specific credentials by entering a comma-separated list of Credential IDs.
+    - **Option 4**: Import credentials from a JSON file.
+    - **Option 4**: Exit
 
 3. ### Output Options (for Decryption):
 
-After decryption, choose whether to:
+  After decryption, choose whether to:
   * Print the decrypted data to the console.
   * Save the decrypted data to a file.
   * Both print and save the results.
@@ -237,6 +239,146 @@ After decryption, choose whether to:
 When importing, the script checks for duplicates (credentials with the same name, type, and organization) and logs any that are skipped.
 
 ---
+
+## Non-Interactive:
+
+  This script can can be executed non-interactively by using the `--quiet` option, which will require the following additional flag(s):
+    - For non-interactivity: `--quiet`
+      - This flag is mutually exclusive with the `import` and `export` flags
+    - For exporting credentials: `--export --export-file={{ creds_file }}`
+      - This flag exports the decrypted credentials to a given filename
+    - For importing credentials: `--import --import-file={{ creds_file }}`
+      - This flag imports the credentials, which in-turn become decrypted, using a given filename
+
+  **Side Note** Does it offer a `--help` option to see how to run this?
+
+  Export Example:
+
+  ```shell
+  ./aapCreds.py --quiet --export --export-file=creds.json
+  ```
+
+  Import Example:
+
+  ```shell
+  ./aapCreds.py --quiet --import --import-file=creds.json
+  ```
+
+---
+
+## Installation and Setup - Option 2 (Within Playbooks)
+
+### Running Script within an Ansible Playbook
+
+1. **Environment Verification**:
+
+    Confirm you have access to AWX modesl by running an interactive shell:
+    
+    ```shell
+    awx-manage shell_plus
+    ```
+    If you do have access, proceed. If you don't, make sure you are on a server, typically a controller node, that does have access.
+
+2. **Import and Script**:
+
+    - Save the script as **aapCreds.py** onto your AWX/AAP server, where the required Python environment is active (typically a controller node).
+    - The script should be saved to the following location on AAP: `/var/lib/awx/venv/awx/lib/python3.9/site-packages/awx/main/management/commands/aapCreds.py`
+      - This allows the script to be used as an `awx-manage` plugin|module instead of running it separately. This simplifies things when using the `command` module in an
+        Ansible playbook
+
+3. **Apply Appropriate Permissions**:
+
+    This is optional considering the Django framework will read in the file and execute the code. However, just in case you need to make it executable, here's how:
+
+    ```shell
+    chmod +x aapCreds.py
+    ```
+    
+4. **Create Ansible Playbook for Execution**: (Option 1)
+
+    If you would like to run this script as an Ansible Playbook, you'll need to create a playbook that offers the following tasks:
+      - A task for the export process (if necessary)
+      - A task for the import process (if necessary)
+      - A cleanup task to remove the decrypted file (if necessary)
+
+    Here is a sample playbook called `credentials_tasks.yml`:
+
+    ```yaml
+    ---
+
+    - name: Manage AWX/AAP Credential Export/Import
+      hosts: devcontroller # Edit this!
+      gather_facts: false
+      vars:
+        creds_file: "{{ creds_file_path }}" # Edit this in your inventory.yml file (consider vaulting it)
+
+    tasks:
+      - name: Export credentials to JSON file
+        command: awx-manage aapCreds --quiet --export --export-file={{ creds_file }}
+        register: export_output
+
+      - name: Results of export
+        debug:
+          msg: "Export Output: {{ export_output.stdout }}"
+
+      - name: Import credentials from JSON file
+        command: awx-manage aapCreds-quiet --import --import-file={{ creds_file }}
+        register: import_output
+
+      - name: Results of import
+        debug:
+          msg: "Import Output: {{ import_output.stdout }}"
+
+      - name: Remove credentials JSON file
+        file:
+          path: "(( creds_file }}"
+          state: absent
+    ```
+
+    If you prefer to run this playbook as a task from another playbook, you can create a task file that you can include in the bigger or separate playbook, as follows:
+
+    ```yaml
+    # credentials_tasks.yml
+
+    - name: Export credentials to JSON file
+      command: awx-manage aapCreds --quiet --export --export-file={{ creds_file }} # Edit this var within your inventory.yml file
+      register: export_output
+
+    - name: Results of export
+      debug:
+      msg: "Export Output: {{ export_output.stdout }}"
+
+    - name: Import credentials from JSON file
+      command: awx-manage aapCreds --quiet --import --import-file={{ creds_file }} # Edit this var within your inventory.yml file
+      register: import_output
+
+    - name: Results of import
+      debug:
+        msg: "Import Output: {{ import_output.stdout }}"
+
+    - name: Remove credentials JSON file
+      file:
+        path: {{ creds_file }} # Edit this var within your inventory.yml file
+        state: absent
+    ```
+
+    Then, in your main or bigger playbook, you include the playbook as a task, as follows:
+
+    ```yaml
+    ---
+
+    - name: MAIN PLAYBOOK
+      hosts: localhost
+      tasks:
+        - name: Run credentials export/import tasks
+          include_tasks: credentials_tasks.yml
+
+        - name: Other tasks from main playbook continue ...
+          debug:
+            msg: "Other tasks running ..."
+    ```
+---
+
 
 ## Function Details
 
