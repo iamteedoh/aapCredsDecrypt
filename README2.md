@@ -242,27 +242,25 @@ When importing, the script checks for duplicates (credentials with the same name
 
 ## Non-Interactive
 
-  This script can can be executed non-interactively by using the `--quiet` option, which will require the following additional flag(s):
-    * For non-interactivity: `--quiet`
-      * This flag is mutually exclusive with the `import` and `export` flags
-    * For exporting credentials: `--export --export-file={{ creds_file }}`
-      * This flag exports the decrypted credentials to a given filename
-    * For importing credentials: `--import --import-file={{ creds_file }}`
-      * This flag imports the credentials, which in-turn become decrypted, using a given filename
+This script can can be executed non-interactively by using the `--quiet` option, which will require the following additional flag(s):
+* For non-interactivity: `--quiet`
+  * This flag is mutually exclusive with the `import` and `export` flags
+* For exporting credentials: `--export --export-file={{ creds_file }}`
+  * This flag exports the decrypted credentials to a given filename
+* For importing credentials: `--import --import-file={{ creds_file }}`
+  * This flag imports the credentials, which in-turn become decrypted, using a given filename
 
-  **Side Note** Does it offer a `--help` option to see how to run this?
+Export Example:
 
-  Export Example:
+```shell
+./aapCreds.py --quiet --export --export-file=creds.json
+```
 
-  ```shell
-  ./aapCreds.py --quiet --export --export-file=creds.json
-  ```
+Import Example:
 
-  Import Example:
-
-  ```shell
-  ./aapCreds.py --quiet --import --import-file=creds.json
-  ```
+```shell
+./aapCreds.py --quiet --import --import-file=creds.json
+```
 
 ---
 
