@@ -484,7 +484,7 @@ Then, in your main or bigger playbook, you include the playbook as a task, as fo
 
 ## Additional Notes
 
-### Why isn't a main() function required in this script?
+_Why isn't a main() function required in this script?_
 
 In many AWX/AAP management scripts, including this one, a separate `main()` function isn't strictly necessary because of the following
 reasons:
@@ -493,7 +493,7 @@ reasons:
 
 In short, the script is designed to run immediately when invoked in its intended environment, so a separate `main()` function is optional.
 
-### Why `awx-manage aapCreds ...` used vs `awx-manage aapCreds.py ...` considering the script name is aapCreds.py?
+_Why `awx-manage aapCreds ...` used vs `awx-manage aapCreds.py ...` considering the script name is aapCreds.py?_
 
 The usage of `awx-manage aapCreds` is based on how AWX registers and invokes management commands:
   * **Registered Command Name**: The script has been integrated in AWX as a management command with the name aapCreds. When you call `awx-manage aapCreds`, you are invoking that specific command.
