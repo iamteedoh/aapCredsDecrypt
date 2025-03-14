@@ -510,9 +510,3 @@ Contributions and improvements to the script are welcome. When submitting change
 
 ---
 
-## License
-
-This script is provides "as-is" without any warranty. Users are free to use, modify, and dsitribute the script, subject to any AWX/AAP licensing restrictions.
-
----
-
