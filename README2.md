@@ -28,9 +28,9 @@ This new version, **aapCreds.py**, includes enhanced flow control and a refined 
   - [import_credentials_from_file](#import_credentials_from_file)
   - [main](#main)
 - [Troubleshooting](#troubleshooting)
+- [Additional Notes](#additional-notes)
 - [Contributing](#contributing)
 - [License](#license)
-- [Playbook Notes](#playbook-notes)
 
 ---
 
@@ -455,13 +455,21 @@ When importing, the script checks for duplicates (credentials with the same name
     - **Implementation**:
         Reads JSON data from a specified file, iterating over each credential's data to invoke `import_credential`. Summarizes the count of imported credentials and lists duplicates skipped.
 
-### main
+### interactive_memu (In interactive mode only)
 
     - **Purpose**:
-        Serves as the primary control loop offering an interactive menu.
+        - Serves as the primary control loop offering an interactive menu.
+        - It captures and validates the user's input, ensuring that only a valid selection proceeds.
+        - Depending on the user's choice, it calls the corresponding function (for example, it might call the decryption functions or the import 
+          function).
+        - It typically loops back to the menu after completing an action, allowing the user to perform multiple operations in one session until
+          they choose to exit
+        - Essentially, `interactive_menu()` orchestrates the interactive flow of the program and keeps the user engaged until they decide to
+          stop.
 
     - **Implemenation**:
-        Displays the main menu with options to list credential types, decrypt credentials (all or specific), import credentials, or exit; processes user input accordingly until exit is chosen.
+        Displays the main menu with options to list credential types, decrypt credentials (all or specific), import credentials, or exit;
+        processes user input accordingly until exit is chosen.
 
 ---
 
@@ -475,6 +483,25 @@ When importing, the script checks for duplicates (credentials with the same name
 
 - **File I/O Issues**:
     Verify that file paths provided for saving or importing JSON data are accessible and that proper permissions are set.
+
+---
+
+## Additional Notes
+
+### Why isn't a main() function required in this script?
+
+    In many AWX/AAP management scripts, including this one, a separate `main()` function isn't strictly necessary because of the following
+    reasons:
+      - **Direct Execution in AWX/AAP**: The script is intended to be run within the AWP/AAP environment, often via the `awx-manage` command or within an interactive shell. In these contexts, the script's top-level code, which includes the call to `interactive_menu()`, is executed immediately. This direct execution pattern makes an explicit `main()` wrapper redundant.
+      - **Integration with AWX Management Commands**: AWX management commands are typically structured so that the entry point is defined by the command registration. The AWX framework calls the script directly, so embedding all logic at the top level or via an immediate call to the interactive menu is both acceptable and common.
+
+      In short, the script is designed to run immediately when invoked in its intended environment, so a separate `main()` function is optional.
+
+### Why `awx-manage aapCreds ...` used vs `awx-manage aapCreds.py ...` considering the script name is aapCreds.py?
+
+    The usage of `awx-manage aapCreds` is based on how AWX registers and invokes management commands:
+      - **Registered Command Name**: The script has been integrated in AWX as a management command with the name aapCreds. When you call `awx-manage aapCreds`, you are invoking that specific command.
+      - **Syntax Requirements**: The `awx-manage` tool expects a clean command name. Adding extraneous characters, such as a trailing question mark or a field separator, such as a period (.), would not match the registered command name and would lead to errors or unexpected behavior. In other words, the command is designed to be called without any punctuation byond the command name. The `awx-manage` tool will strip the script name and only use the basename.
 
 ---
 
@@ -492,32 +519,4 @@ Contributions and improvements to the script are welcome. When submitting change
 This script is provides "as-is" without any warranty. Users are free to use, modify, and dsitribute the script, subject to any AWX/AAP licensing restrictions.
 
 ---
-
-## Playbook Notes
-
-Add the following task to your main playbook to import credentials:
-
-```yaml
-- name: Import ALL credentials from JSON (No Script)
-  ansible.builtin.import_playbook: import_all_credentials.yml # Main playbook
-  vars:
-    credential_file: "/path/to/your/creds,json" # Specify the credentials file!
-```
-
-For testing outside the main playbook, you can use this temporary `main` playbook:
-
-```yaml
----
-
-- name: Main Playbook
-  hosts: localhost
-  gather_facts: false
-  become: false
-
-  tasks:
-    - name: Import ALL credentials from JSON (No Script)
-      ansible.builtin.import_playbook: import_all_credentials.yml # Main playbook
-      vars:
-        credential_file: "/path/to/your/creds.json" # Specify the credentials file!
-```
 
