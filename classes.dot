@@ -1,5 +1,0 @@
-digraph "classes" {
-rankdir=BT
-charset="utf-8"
-"aapCreds.Command" [color="black", fontcolor="black", label=<{Command|help : str<br ALIGN="LEFT"/>|add_arguments(parser)<br ALIGN="LEFT"/>handle()<br ALIGN="LEFT"/>}>, shape="record", style="solid"];
-}

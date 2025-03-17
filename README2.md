@@ -16,6 +16,8 @@ This new version, **aapCreds.py**, includes enhanced flow control and a refined 
 - [Prerequisites](#prerequisites)
 - [Flowchart of aapCreds.py](#flowchart-of-aapcredspy)
 - [Installation and Setup](#installation-and-setup)
+  - [Installation and Setup - Option 1 (Outside of Playbooks)](#installation-and-setup-option-1-outside-of-playbooks)
+  - [Installation and Setup - Option 2 (Within Playbooks](#installation-and-setup-option-2-within-playbooks)
 - [Usage Instructions](#usage-instructions)
 - [Function Details](#function-details)
   - [list_used_credential_types](#list_used_credential_types)
@@ -26,7 +28,6 @@ This new version, **aapCreds.py**, includes enhanced flow control and a refined 
   - [output_results](#output_results)
   - [import_credential](#import_credential)
   - [import_credentials_from_file](#import_credentials_from_file)
-  - [main](#main)
 - [Troubleshooting](#troubleshooting)
 - [Additional Notes](#additional-notes)
 - [Contributing](#contributing)
@@ -166,7 +167,10 @@ flowchart LR
 
 ---
 
-## Installation and Setup - Option 1 (Outside of Playbooks)
+## Installation and Setup
+---
+
+### Installation and Setup - Option 1 (Outside of Playbooks)
 
 ### Running Script Outside of an Ansible Playbook
 
