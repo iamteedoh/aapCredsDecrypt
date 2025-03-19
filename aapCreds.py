@@ -39,6 +39,7 @@ SECRET_FIELDS = [
     "secret",
     "secret_key",
     "security_token",
+    "token",
 ]
 
 def list_used_credential_types():
