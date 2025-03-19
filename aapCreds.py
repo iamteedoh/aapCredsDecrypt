@@ -7,6 +7,7 @@ Usage:
       awx-manage aapCreds
   Non-interactive mode:
       awx-manage aapCreds --quiet --export --export-file=/tmp/creds.json
+      awx-manage aapCreds --quiet --export --limit --org-name="My Organization" --export-file=/tmp/creds.json
       awx-manage aapCreds --quiet --import --import-file=/tmp/creds.json
 """
 
@@ -188,6 +189,16 @@ def decrypt_all_credentials():
         results.append(decrypt_single_credential(cred))
     return results
 
+def decrypt_credentials_by_org(org_name):
+    """
+    Decrypt and return details for credentials belonging to the specified organization.
+    """
+    creds = Credential.objects.filter(organization__name=org_name)
+    results = []
+    for cred in creds:
+        results.append(decrypt_single_credential(cred))
+    return results
+
 def output_results(decrypted):
     """
     Prompt the user for output options and display the decrypted credentials.
@@ -345,8 +356,9 @@ def interactive_menu():
         print("  2) Decrypt ALL credentials")
         print("  3) Decrypt specific credentials")
         print("  4) Import credentials from file")
-        print("  5) Exit")
-        option = input("Enter option [1-5]: ").strip()
+        print("  5) Decrypt credentials for a specific organization")
+        print("  6) Exit")
+        option = input("Enter option [1-6]: ").strip()
 
         if option == "1":
             types = list_used_credential_types()
@@ -396,6 +408,18 @@ def interactive_menu():
             input("Press Enter to return to the main menu...")
 
         elif option == "5":
+            org_name = input("Enter the organization name to export: ").strip()
+            creds = Credential.objects.filter(organization__name=org_name)
+            if not creds:
+                print(f"No credentials found for organization '{org_name}'.\n")
+                input("Press Enter to return to the main menu...")
+                continue
+            print(f"\nDecrypting credentials for organization '{org_name}'...\n")
+            decrypted = decrypt_credentials_by_org(org_name)
+            output_results(decrypted)
+            input("Press Enter to return to the main menu...")
+
+        elif option == "6":
             print("Exiting.")
             break
 
@@ -411,6 +435,9 @@ class Command(BaseCommand):
         parser.add_argument('--export-file', type=str, help='Path to export file')
         parser.add_argument('--import-file', type=str, help='Path to import file')
         parser.add_argument('--quiet', action='store_true', help='Suppress interactive prompts and run non-interactively')
+        # New flags for limiting export to a specific organization
+        parser.add_argument('--limit', action='store_true', help='Limit export to a single organization')
+        parser.add_argument('--org-name', type=str, help='Organization name to limit export')
 
     def handle(self, *args, **options):
         quiet = options.get("quiet")
@@ -418,11 +445,20 @@ class Command(BaseCommand):
         import_ = options.get("import_")
         export_file = options.get("export_file")
         import_file = options.get("import_file")
+        limit = options.get("limit")
+        org_name = options.get("org_name")
 
         if quiet:
             if export:
                 self.stdout.write("Running non-interactive export...")
-                decrypted = decrypt_all_credentials()
+                if limit:
+                    if not org_name:
+                        self.stderr.write("Error: --org-name must be specified when using --limit.")
+                        return
+                    self.stdout.write(f"Exporting credentials for organization: {org_name}")
+                    decrypted = decrypt_credentials_by_org(org_name)
+                else:
+                    decrypted = decrypt_all_credentials()
                 # Remove duplicate job templates
                 for cred in decrypted:
                     unique_jts = {tuple(sorted(d.items())) for d in cred['related_job_templates']}
