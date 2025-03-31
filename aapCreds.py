@@ -167,7 +167,8 @@ def decrypt_single_credential(cred):
     fields_output = []
     for key, value in cred.inputs.items():
         if value is not None:
-            if key in SECRET_FIELDS:
+            # Use the heuristic: if the field is in SECRET_FIELDS or if the value starts with "$encrypted$"
+            if key in SECRET_FIELDS or (isinstance(value, str) and value.startswith("$encrypted$")):
                 try:
                     actual_value = decrypt_field(cred, key)
                 except Exception as e:
