@@ -20,6 +20,7 @@ from datetime import datetime
 
 from django.core.management.base import BaseCommand
 from django.db.models import Q
+from django.utils.encoding import force_str  # Added for lazy conversion
 
 # AWX/AAP specific imports
 from awx.main.models import (
@@ -41,6 +42,21 @@ SECRET_FIELDS = [
     "security_token",
     "token",
 ]
+
+def convert_lazy(obj):
+    """
+    Recursively convert Django lazy translation objects (and any other non-serializable objects)
+    to their string representation using force_str.
+    """
+    if isinstance(obj, dict):
+        return {k: convert_lazy(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_lazy(item) for item in obj]
+    else:
+        try:
+            return force_str(obj)
+        except Exception:
+            return obj
 
 def list_used_credential_types():
     """
@@ -203,6 +219,7 @@ def decrypt_credentials_by_org(org_name):
 def output_results(decrypted):
     """
     Prompt the user for output options and display the decrypted credentials.
+    Converts lazy objects to strings before JSON serialization.
     """
     if decrypted:
         # Remove duplicate job templates
@@ -210,7 +227,9 @@ def output_results(decrypted):
             unique_jts = {tuple(sorted(d.items())) for d in cred['related_job_templates']}
             cred['related_job_templates'] = [dict(t) for t in unique_jts]
 
-        output_json = json.dumps(decrypted, indent=2)
+        # Recursively convert any lazy objects to plain strings
+        cleaned_decrypted = convert_lazy(decrypted)
+        output_json = json.dumps(cleaned_decrypted, indent=2)
         choice = input(
             "How do you want to output the decrypted credentials?\n"
             "  1) Standard Output\n"
@@ -464,7 +483,9 @@ class Command(BaseCommand):
                 for cred in decrypted:
                     unique_jts = {tuple(sorted(d.items())) for d in cred['related_job_templates']}
                     cred['related_job_templates'] = [dict(t) for t in unique_jts]
-                output_json = json.dumps(decrypted, indent=2)
+                # Convert lazy objects to plain strings
+                cleaned_decrypted = convert_lazy(decrypted)
+                output_json = json.dumps(cleaned_decrypted, indent=2)
                 if not export_file:
                     self.stderr.write("Error: --export-file must be specified for export.")
                     return
