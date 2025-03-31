@@ -227,6 +227,9 @@ def output_results(decrypted):
             unique_jts = {tuple(sorted(d.items())) for d in cred['related_job_templates']}
             cred['related_job_templates'] = [dict(t) for t in unique_jts]
 
+        # Inform the user how many credentials were exported
+        print(f"\nExported {len(decrypted)} credentials.\n")
+
         # Recursively convert any lazy objects to plain strings
         cleaned_decrypted = convert_lazy(decrypted)
         output_json = json.dumps(cleaned_decrypted, indent=2)
@@ -394,6 +397,8 @@ def interactive_menu():
         elif option == "2":
             print("\nDecrypting ALL credentials...\n")
             decrypted = decrypt_all_credentials()
+            # Print count of exported credentials
+            print(f"Exported {len(decrypted)} credentials.\n")
             output_results(decrypted)
             input("Press Enter to return to the main menu...")
 
@@ -419,6 +424,8 @@ def interactive_menu():
                 continue
             print("\nDecrypting selected credentials...\n")
             decrypted = decrypt_credentials_by_ids(selected_ids)
+            # Print count of exported credentials
+            print(f"Exported {len(decrypted)} credentials.\n")
             output_results(decrypted)
             input("Press Enter to return to the main menu...")
 
@@ -436,6 +443,8 @@ def interactive_menu():
                 continue
             print(f"\nDecrypting credentials for organization '{org_name}'...\n")
             decrypted = decrypt_credentials_by_org(org_name)
+            # Print count of exported credentials
+            print(f"Exported {len(decrypted)} credentials.\n")
             output_results(decrypted)
             input("Press Enter to return to the main menu...")
 
@@ -493,6 +502,7 @@ class Command(BaseCommand):
                     with open(export_file, "w") as f:
                         f.write(output_json)
                     self.stdout.write(f"Credentials exported to {export_file}")
+                    self.stdout.write(f"Exported {len(decrypted)} credentials.")
                 except Exception as e:
                     self.stderr.write(f"Error writing export file: {e}")
             elif import_:
