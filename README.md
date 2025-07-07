@@ -12,6 +12,7 @@ This new version, **aapCreds.py**, includes enhanced flow control and a refined 
 ## Table of Contents
 
 - [Introduction](#introduction)
+- [Use Case](#use-case)
 - [Features](#features)
 - [Prerequisites](#prerequisites)
 - [Flowchart of aapCreds.py](#flowchart-of-aapcredspy)
@@ -38,6 +39,13 @@ This new version, **aapCreds.py**, includes enhanced flow control and a refined 
 ## Introduction
 
 This script is a utility to manage AWX/AAP credentials by decrypting sensitive fields and importing credentials from a JSON file. It is meant to be executed within an AWX/AAP environment where all the necessary Django models and AWX-specific utilities are available.
+
+---
+
+## Use Case 
+
+This script is to facilitate the migration of credentials from Ansible Tower to
+AAP, where credentials are not part of the backup/export/import process.
 
 ---
 

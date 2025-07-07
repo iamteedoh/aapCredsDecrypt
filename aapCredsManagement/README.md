@@ -1,5 +1,7 @@
 # AWX/AAP Credential Decrypt & Import Script
 
+# [OBSOLETE] - please use aapCreds.py script instead
+
 This script is designed for AWX/AAP environments to facilitate the decryption and import of credentials. It provides an interactive menu-based interface to:
 - List all used Credential Types.
 - Decrypt all credentials or selected ones.
@@ -12,6 +14,7 @@ The script leverages AWX/AAP’s Django ORM and models, including `Credential`, 
 ## Table of Contents
 
 - [Introduction](#introduction)
+- [Use Case](#use-case)
 - [Features](#features)
 - [Prerequisites](#prerequisites)
 - [Installation and Setup](#installation-and-setup)
@@ -35,6 +38,14 @@ The script leverages AWX/AAP’s Django ORM and models, including `Credential`, 
 ## Introduction
 
 This script is a utility to manage AWX/AAP credentials by decrypting sensitive fields and importing credentials from a JSON file. It is meant to be executed within an AWX/AAP environment where all the necessary Django models and AWX-specific utilities are available.
+
+---
+
+## Use Case
+
+This script is to facilitate the migration of credentials from Ansible Tower to
+AAP, where credentials are not part of the backup/export/import process.
+
 
 ---
 
