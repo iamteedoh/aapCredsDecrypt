@@ -1,0 +1,18 @@
+---
+# Lenient yamllint configuration for aapCredsDecrypt.
+#
+# yamllint still verifies that every YAML file parses and has no duplicate
+# keys. The style rules below are relaxed so the existing example playbooks
+# (with long inline awx-manage commands and yes/no booleans) and the GitHub
+# workflow/issue-template files validate without being rewritten.
+extends: default
+
+rules:
+  line-length: disable
+  document-start: disable
+  comments: disable
+  comments-indentation: disable
+  indentation: disable
+  truthy:
+    allowed-values: ["true", "false", "yes", "no"]
+    check-keys: false
