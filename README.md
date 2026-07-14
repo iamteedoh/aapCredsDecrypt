@@ -1,5 +1,11 @@
 # AWX/AAP Credential Decrypt & Import Script
 
+[![CI](https://github.com/iamteedoh/aapCredsDecrypt/actions/workflows/ci.yml/badge.svg)](https://github.com/iamteedoh/aapCredsDecrypt/actions/workflows/ci.yml)
+![License](https://img.shields.io/badge/license-GPL--3.0-blue)
+[![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-%E2%9D%A4-ea4aaa?logo=githubsponsors)](https://github.com/sponsors/iamteedoh)
+[![Patreon](https://img.shields.io/badge/Patreon-support-f96854?logo=patreon)](https://patreon.com/iamteedoh)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-ffdd00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/iamteedoh)
+
 This script is designed for AWX/AAP environments to facilitate the decryption and import of credentials. It provides an interactive menu-based interface to:
 - List all used Credential Types.
 - Decrypt all credentials or selected ones.
