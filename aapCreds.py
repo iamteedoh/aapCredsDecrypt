@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 ## Author: Tito Valentin
 
@@ -17,7 +18,7 @@
 ## GNU General Public License for more details.
 ##
 ## You should have received a copy of the GNU General Public License
-## along with aapJobCleanupHistory. If not, see <https://www.gnu.org/licenses/>.
+## along with aapCredsDecrypt. If not, see <https://www.gnu.org/licenses/>.
 
 """
 AWX/AAP Credential Export/Import Management Command

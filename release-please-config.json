@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "simple",
+  "bump-minor-pre-major": true,
+  "bootstrap-sha": "c01c9e20b2eb95a23855088a126a5fb9d08402b2",
+  "packages": {
+    ".": {
+      "package-name": "aapCredsDecrypt"
+    }
+  }
+}

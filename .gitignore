@@ -1,2 +1,19 @@
-myenv
+# macOS
 .DS_Store
+
+# Secrets / local environment
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# Local virtualenvs
+myenv/
+pycg_env/
+viztracer_env/
+
+# Decrypted credential exports (never commit)
+*.creds.json

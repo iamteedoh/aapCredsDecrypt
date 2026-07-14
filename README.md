@@ -32,6 +32,7 @@ This new version, **aapCreds.py**, includes enhanced flow control and a refined 
 - [Troubleshooting](#troubleshooting)
 - [Additional Notes](#additional-notes)
 - [Contributing](#contributing)
+- [Security](#security)
 - [License](#license)
 
 ---
@@ -519,6 +520,28 @@ Contributions and improvements to the script are welcome. When submitting change
   * Ensure compatibility with the AWX/AAP environment.
   * Update this README accordingly.
   * Provide clear commit messages and documentation for any new features.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, the validation suite, and
+the pull request process, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for
+community expectations.
+
+---
+
+## Security
+
+This tool decrypts and exports credential secrets in cleartext. Treat every
+export as a live secret and delete it once your migration is complete. To report
+a vulnerability, follow [SECURITY.md](SECURITY.md) and use GitHub's private
+vulnerability reporting rather than a public issue.
+
+---
+
+## License
+
+aapCredsDecrypt is free software licensed under the
+[GNU General Public License v3](LICENSE) (GPL-3.0-or-later). It is distributed in
+the hope that it will be useful, but WITHOUT ANY WARRANTY; see the license text
+for details.
 
 ---
 

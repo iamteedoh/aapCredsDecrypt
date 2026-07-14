@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest an aapCredsDecrypt improvement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What credential export, decryption, or import task is difficult today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the desired behavior and affected script or playbook.
+    validations:
+      required: true
+
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety considerations
+      description: Note handling of decrypted secrets, destructive actions, or authorization boundaries.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe other approaches or workarounds you considered.

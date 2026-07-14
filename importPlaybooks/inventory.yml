@@ -5,12 +5,12 @@ all:
     source:
       hosts:
         sourcesys:
-          ansible_host: 192.168.1.100
+          ansible_host: 192.0.2.100
       vars:
         source_host: "sourcesys"  # Matches the host label above
     destination:
       hosts:
         destsys:
-          ansible_host: 192.168.1.200
+          ansible_host: 192.0.2.200
       vars:
         destination_host: "destsys"  # Matches the host label above
